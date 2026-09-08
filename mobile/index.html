@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Gartika Edge Unit</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="edge-header">
+      <div class="logo-group">
+        <div class="brand-badge">SIH 2026</div>
+        <h1 class="title">GARTIKA EDGE UNIT</h1>
+        <p class="subtitle">Mobile Public Transit Sensing Terminal</p>
+      </div>
+      <div class="device-tag">
+        <span class="label">DEVICE:</span>
+        <input type="text" id="busIdInput" value="BUS-101" spellcheck="false" />
+      </div>
+    </header>
+
+    <!-- Status Indicators -->
+    <div class="status-grid">
+      <div class="status-pill" id="camStatus">
+        <span class="dot"></span>
+        <span class="text">CAMERA</span>
+      </div>
+      <div class="status-pill" id="gpsStatus">
+        <span class="dot"></span>
+        <span class="text">GPS</span>
+      </div>
+      <div class="status-pill online" id="netStatus">
+        <span class="dot"></span>
+        <span class="text">NETWORK</span>
+      </div>
+    </div>
+
+    <!-- Camera / Viewport View -->
+    <div class="viewport-container">
+      <video id="cameraPreview" autoplay playsinline muted></video>
+      <div class="hud-overlay">
+        <div class="hud-corner top-left"></div>
+        <div class="hud-corner top-right"></div>
+        <div class="hud-corner bottom-left"></div>
+        <div class="hud-corner bottom-right"></div>
+        
+        <div class="hud-telemetry-overlay">
+          <div class="hud-line">AI INGESTION: <span id="ingestMode">ACTIVE</span></div>
+          <div class="hud-line">FPS: <span id="hudFps">25.0</span> | LATENCY: <span id="hudPing">12ms</span></div>
+        </div>
+      </div>
+      <div class="fallback-camera-msg" id="camFallbackMsg">
+        <span>📷 Camera in standby / preview mode</span>
+      </div>
+    </div>
+
+    <!-- Live Telemetry Card -->
+    <div class="telemetry-card">
+      <div class="card-title">LIVE SENSOR TELEMETRY</div>
+      
+      <div class="coords-display">
+        <div class="coord-box">
+          <div class="coord-label">LATITUDE</div>
+          <div class="coord-val" id="latVal">12.971598</div>
+        </div>
+        <div class="coord-box">
+          <div class="coord-label">LONGITUDE</div>
+          <div class="coord-val" id="lonVal">77.594562</div>
+        </div>
+      </div>
+
+      <div class="sub-metrics">
+        <div class="metric-item">
+          <span class="m-label">ACCURACY:</span>
+          <span class="m-val" id="accVal">±3.5 m</span>
+        </div>
+        <div class="metric-item">
+          <span class="m-label">SPEED:</span>
+          <span class="m-val" id="speedVal">32.4 km/h</span>
+        </div>
+        <div class="metric-item">
+          <span class="m-label">IMU Z-SHOCK:</span>
+          <span class="m-val" id="imuVal">9.81 m/s²</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Control Buttons -->
+    <div class="controls-section">
+      <button id="toggleBtn" class="btn btn-primary">
+        <span class="btn-icon">⚡</span>
+        <span class="btn-text">START SENSING</span>
+      </button>
+
+      <div class="secondary-btns">
+        <button id="simGpsBtn" class="btn btn-secondary">
+          <span>📍 SIMULATE ROUTE GPS</span>
+        </button>
+        <button id="triggerBumpBtn" class="btn btn-danger">
+          <span>💥 TRIGGER ROAD BUMP</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Event Activity Log -->
+    <div class="activity-log-card">
+      <div class="card-title">EDGE TRANSMISSION LOG</div>
+      <div class="log-stream" id="logStream">
+        <div class="log-line info">[INIT] Gartika Edge Unit initialized.</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="edge-footer">
+      <div>Gartika v1.0 • Smart City Urban Intelligence</div>
+      <div id="connectionTarget">Host: http://localhost:8000</div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
