@@ -6,9 +6,11 @@
 
 ---
 
-## 1. How Gartika Works
+## 1. Overview & Problem Statement
 
-**Gartika** turns moving public-transport buses and municipal fleets into real-time mobile urban intelligence platforms. Instead of relying on static CCTV cameras with limited field-of-view or delayed citizen complaints, transit buses continuously survey road surface conditions, traffic flows, and hazards along their regular routes.
+Urban road networks suffer from delayed hazard identification, inefficient manual road audits, and severe bandwidth bottlenecks when transmitting raw video streams from fleet cameras. 
+
+**Gartika** transforms moving public-transport buses and municipal fleets into real-time mobile urban intelligence platforms. Instead of relying on static CCTV cameras with limited field-of-view or delayed citizen complaints, transit buses continuously survey road surface conditions, traffic flows, and hazards along their regular routes using edge AI and sensor fusion.
 
 ### The 5-Stage Intelligence Loop
 
@@ -29,7 +31,7 @@
             │ Non-blocking WebSocket Broadcast & SQLite Storage
             ▼
 ┌────────────────────────┐
-│ 4. PREDICT & VISUALIZE │ ➔ Minimalist GIS Command Center with real-time bus tracking and defect markers
+│ 4. PREDICT & VISUALIZE │ ➔ Enterprise GIS Command Center with real-time bus tracking and defect markers
 └───────────┬────────────┘
             │ Operator Inspection
             ▼
@@ -40,7 +42,7 @@
 
 ---
 
-## 2. End-to-End Architecture
+## 2. End-to-End System Architecture
 
 ```text
 ┌────────────────────────────────────────────────────────┐
@@ -56,8 +58,8 @@
 │                                                        │
 │  ┌──────────────────────┐    ┌──────────────────────┐  │
 │  │      AI ENGINE       │    │   FASTAPI BACKEND    │  │
-│  │ - YOLOv8 Traffic Det │    │ - REST APIs          │  │
-│  │ - ByteTrack Tracker  │───▶│ - Real-time WS Stream│  │
+│  │ - YOLOv8 Traffic Det │    │ - REST & WebSocket   │  │
+│  │ - ByteTrack Tracker  │───▶│ - Real-time Ingestion│  │
 │  │ - Pothole Detector   │    │ - Bus Registry       │  │
 │  │ - IMU Sensor Fusion  │    │ - Work Orders Engine │  │
 │  │ - Deduplication (5s) │    └──────────┬───────────┘  │
@@ -73,7 +75,7 @@
 │  │            GIS COMMAND DASHBOARD                 │  │
 │  │ - Live dark-mode Leaflet map with Bus follow     │  │
 │  │ - Real-time AI event stream & category filters   │  │
-│  │ - Edge Camera preview window                     │  │
+│  │ - Edge Camera preview window (1 FPS sync)        │  │
 │  │ - Evidence inspection modal with 1-click WO      │  │
 │  │ - Bandwidth savings comparison (99.97% reduction)│  │
 │  └──────────────────────────────────────────────────┘  │
@@ -82,146 +84,98 @@
 
 ---
 
-## 3. How to Use with Mobile (Step-by-Step)
-
-The prototype turns any smartphone into a mobile edge sensing terminal without requiring any app store installation.
-
-### Step 1: Connect Laptop and Phone to the Same Network
-- Connect both your laptop and smartphone to the **same Wi-Fi network**, OR
-- Turn on your laptop's **mobile hotspot** and connect your smartphone to it.
-
-### Step 2: Start the Gartika Platform on Your Laptop
-Run the startup script from the project root:
-```bash
-./scripts/start_demo.sh
-```
-Or start the server directly:
-```bash
-python3 -m backend.app.main
-```
-The terminal will display your local network IP (e.g., `http://192.168.1.15:8000`).
-
-### Step 3: Open the Mobile Sensing Web App on Your Phone
-1. Open Chrome / Safari on your mobile phone.
-2. Navigate to:
-   ```text
-   http://<YOUR-LAPTOP-IP>:8000/mobile
-   ```
-   *(Example: `http://192.168.1.15:8000/mobile`)*
-3. You will see the dark **Gartika Edge Unit** sensing terminal.
-
-### Step 4: Operate Mobile Sensing
-- **Device ID:** Set to `BUS-101` (or custom bus number).
-- **Tap `[ ⚡ START SENSING ]`:**
-  - The phone starts capturing camera frames and telemetry.
-  - GPS coordinates and speed update in real time.
-- **Indoor / Simulation Controls:**
-  - **Simulate Route GPS:** If testing indoors or without live GPS lock, tap `[ 📍 SIMULATE ROUTE GPS ]` to smoothly traverse the Bangalore transit corridor.
-  - **Trigger Road Bump:** Tap `[ 💥 TRIGGER ROAD BUMP ]` to simulate hitting a pothole with the accelerometer (Z-axis shock `16.8 m/s²`).
-- **Dashboard Synchronization:**
-  - Look at your laptop screen on `http://localhost:8000` — the bus marker will move live on the map, telemetry updates every 2 seconds, and live camera frames appear in the preview box.
-
----
-
-## 4. Quick Start for Presentation & Evaluation
+## 3. Quick Start & Setup
 
 ### Prerequisites
 - **Python:** 3.10+
-- **Browser:** Google Chrome, Firefox, Edge, or Safari
+- **Browser:** Google Chrome, Firefox, Safari, or Microsoft Edge
 
-### Single-Command Launch
+### Step 1: Install Dependencies
+```bash
+pip install -r backend/requirements.txt
+pip install -r ai/requirements.txt
+```
+
+### Step 2: Start the Central Platform
+Run the startup script:
 ```bash
 ./scripts/start_demo.sh
 ```
-
-### URLs at a Glance
-| Interface | URL | Purpose |
-|---|---|---|
-| **GIS Command Center** | `http://localhost:8000` | Full urban intelligence dashboard |
-| **Mobile Sensing Unit** | `http://<laptop-ip>:8000/mobile` | Smartphone camera & sensor terminal |
-| **Interactive API Docs** | `http://localhost:8000/docs` | Swagger OpenAPI backend testbed |
-| **Health Check** | `http://localhost:8000/health` | Backend and subsystem status |
+Or run directly via Python:
+```bash
+python3 -m backend.app.main
+```
+The terminal will display your local network access URLs (e.g. `http://192.168.0.110:8000`).
 
 ---
 
-## 5. Live Presentation Walkthrough Script
+## 4. Platform Interfaces
 
-| Step | Action | Observed Result on Screen |
+| Interface | URL | Description |
 |---|---|---|
-| **1** | Open `http://localhost:8000` | **Gartika Command Center** displays active fleet summary, dark GIS map, and metrics. |
-| **2** | Start Sensing on Phone | Bus status switches to **ACTIVE**, and real-time speed & coordinates update. |
-| **3** | AI Detection in Action | Detections appear live in the **Real-Time Event Feed** via WebSockets with confidence scores. |
-| **4** | Defect Inspection | Click on any Pothole event card or map pin to open the **Evidence Modal** showing the localized bounding-box frame and IMU vibration fusion. |
-| **5** | Work Order Dispatch | Click **`[ 📋 DISPATCH WORK ORDER ]`** to instantly generate maintenance ticket `WO-XXXX`. Status is synced across all clients. |
-| **6** | Bandwidth Proof | Point to the **Bandwidth Comparison Panel** demonstrating **99.97% transmission reduction** (~0.035 GB vs 144 GB/day) due to edge processing. |
+| **GIS Command Center** | `http://localhost:8000/` or `/dashboard/` | Full dark-mode urban intelligence GIS map & metrics |
+| **Mobile Sensing Unit** | `http://<laptop-ip>:8000/mobile` | Smartphone camera & sensor ingestion terminal |
+| **Interactive API Docs** | `http://localhost:8000/docs` | Swagger / OpenAPI backend testbed |
+| **Health Check** | `http://localhost:8000/health` | Backend and subsystem status JSON |
+
+---
+
+## 5. Ingestion Modes: Real-Time vs Demo
+
+### Mode A: Real-Time Mobile Sensing (Smartphone)
+1. Connect your phone to the same Wi-Fi network or mobile hotspot as your laptop.
+2. Open `http://<YOUR-LAPTOP-IP>:8000/mobile` in your mobile browser.
+3. Tap **`[ START SENSING ]`**:
+   - The phone streams live GPS coordinates and 3-axis accelerometer readings to the backend.
+   - Tap **`[ Take Snapshot Frame ]`** or allow camera access to upload live visuals.
+   - Tap **`[ TRIGGER ROAD BUMP ]`** to simulate an immediate accelerometer spike ($a_z = 16.8\text{ m/s}^2$). The backend fuses this with the latest camera frame and triggers a verified `POTHOLE` event on the GIS map.
+
+### Mode B: Real-Time USB Webcam / Dashcam Streamer
+Stream from a connected webcam, USB dashcam, or pre-recorded MP4 video file through the AI pipeline into the backend:
+```bash
+# Stream from primary webcam
+python3 scripts/run_webcam_edge.py --camera 0
+
+# Stream from MP4 video file
+python3 scripts/run_webcam_edge.py --video path/to/dashcam.mp4
+```
+
+### Mode C: Clean Live State vs Synthetic Demo
+- **Reset to 100% Clean Real-Time State (No Fake Data):**
+  ```bash
+  python3 scripts/reset_to_live.py
+  ```
+  *(Ensures `DEMO_MODE=false`, clears mock records, and listens only for live data)*
+- **Seed Synthetic Demo Dataset (Optional Presentation Mode):**
+  ```bash
+  python3 scripts/seed_demo_data.py
+  ```
 
 ---
 
 ## 6. Key Innovations & Technical Highlights
 
 ### 1. Dual AI Sensing Pipeline
-- **Traffic & Vehicle Counting:** YOLOv8 detects urban transport classes (`car`, `bus`, `truck`, `motorcycle`, `bicycle`). Integrated **ByteTrack** ensures persistent ID tracking across frames to avoid double-counting.
+- **Traffic & Vehicle Counting:** YOLOv8 detects urban transport classes (`car`, `bus`, `truck`, `motorcycle`, `bicycle`). Integrated **ByteTrack** ensures persistent ID tracking across frames to avoid duplicate counts.
 - **Road Defect Detection:** Vision-based pothole and crack classification boosted by multi-modal IMU accelerometer fusion.
 
-### 2. Spatial & Temporal Deduplication
+### 2. Multi-Modal Sensor Fusion
+- Accelerometer vertical shock spikes ($a_z > 13.5\text{ m/s}^2$ or $\Delta a_z > 4.0\text{ m/s}^2$) automatically match the spatial timestamp with the active camera feed, annotating and confirming severe road distress.
+
+### 3. Spatial & Temporal Deduplication
 - Prevents redundant alerts when a vehicle slows down or stops over a defect using a **5-second temporal cooldown** and a **20-meter spatial Haversine threshold**.
 
-### 3. Privacy-by-Design
-- Local frame anonymization: Automatic blurring of human faces and vehicle license plates before evidence crops are stored.
+### 4. Privacy-by-Design
+- Local frame anonymization: Automatic blurring of human faces and vehicle license plates before evidence crops are persisted.
 
-### 4. Edge vs Cloud Bandwidth Optimization
+### 5. Edge vs Cloud Bandwidth Optimization
 - **Continuous Raw Video:** `~144 GB / vehicle / day`
 - **Gartika Edge Telemetry:** `~0.035 GB / vehicle / day`
-- **Reduction:** **99.97%** data savings, allowing scale to thousands of buses over 4G/5G cellular.
+- **Transmission Reduction:** **99.97%** bandwidth savings, enabling massive municipal fleet scaling over standard cellular networks.
 
 ---
 
-## 7. Individual Service Commands (Manual Run)
-
-### Backend & Command Center
-```bash
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
-```
-
-### AI Video Processing Engine
-```bash
-# Run on demo road video
-python3 ai/video_processor.py --source demo --bus-id BUS-101
-
-# Run on connected webcam
-python3 ai/video_processor.py --source 0
-
-# Run with visual OpenCV preview window
-python3 ai/video_processor.py --source demo --display
-```
-
-### Seed Synthetic Demo Dataset
-```bash
-python3 scripts/seed_demo_data.py
-```
-
-### Reset to Clean Real-Time Live State
-```bash
-python3 scripts/reset_to_live.py
-```
-
-### Run Edge Ingestion / Webcam Streamer
-```bash
-# Ingest live USB webcam or built-in camera to backend with real-time inference
-python3 scripts/run_webcam_edge.py --camera 0
-
-# Stream dashcam video file as live edge input
-python3 scripts/run_webcam_edge.py --video path/to/dashcam.mp4
-```
-
-### Run Full Test Suite
-```bash
-pytest tests/
-```
-
----
-
-## 8. REST API Reference
+## 7. REST & WebSocket API Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -231,20 +185,27 @@ pytest tests/
 | `GET` | `/events` | Filter events by type, severity, confidence, or bus |
 | `GET` | `/events/{id}` | Retrieve individual event details |
 | `PATCH`| `/events/{id}` | Update event status / severity |
-| `POST` | `/telemetry` | Ingest GPS & IMU vibration telemetry from phone |
+| `POST` | `/telemetry` | Ingest GPS & IMU vibration telemetry from phone (triggers bump fusion) |
 | `GET` | `/buses` | Retrieve active buses and telemetry positions |
-| `POST` | `/stream/frame` | Upload live camera frame from mobile unit (triggers CV detection) |
+| `POST` | `/stream/frame` | Upload live camera frame (runs real-time CV inference) |
 | `GET` | `/stream/latest-frame`| Retrieve latest JPEG frame for live stream preview |
 | `POST` | `/work-orders` | Dispatch maintenance work order from detection event |
 | `GET` | `/work-orders` | Retrieve list of maintenance work orders |
 | `PATCH`| `/work-orders/{id}` | Update work order status (`OPEN`, `ASSIGNED`, `IN PROGRESS`, `RESOLVED`) |
-| `WS` | `/ws/events` | High-speed real-time WebSocket event stream |
+| `WS` | `/ws/events` | High-speed real-time WebSocket event broadcast stream |
+
+---
+
+## 8. Automated Test Suite
+
+Run the full pytest suite covering AI detectors, API routes, sensor fusion, static routing, and end-to-end event loops:
+```bash
+pytest tests/ -v
+```
 
 ---
 
 ## 9. Production Hardware Scaling Roadmap
-
-While this prototype uses a smartphone and laptop for demonstration, the production hardware roadmap transitions to:
 
 ```text
 Raspberry Pi 5 (8GB) + Hailo-8 M.2 AI Accelerator (26 TOPS)
@@ -256,16 +217,14 @@ Raspberry Pi 5 (8GB) + Hailo-8 M.2 AI Accelerator (26 TOPS)
 
 ---
 
-## 10. Troubleshooting & Utilities
+## 10. Troubleshooting
 
-- **Mobile Camera Permissions on HTTP:**
-  Mobile browsers restrict continuous `getUserMedia()` camera streams to HTTPS on non-localhost IPs. The mobile terminal provides both native file snapshot capture (`Take Snapshot Frame`) and **Simulate Route GPS** & **Trigger Road Bump** tools, ensuring 100% of features work seamlessly on any device.
+- **Camera Permissions over HTTP on Mobile:**
+  Mobile browsers restrict continuous `getUserMedia()` streams to HTTPS on non-localhost IPs. The mobile terminal includes a native snapshot button (`Take Snapshot Frame`) and **Simulate Route GPS** & **Trigger Road Bump** tools that work across all mobile browsers.
 - **Port 8000 Already in Use:**
-  Set `BACKEND_PORT=8080` in `.env` or run `uvicorn backend.app.main:app --port 8080`.
-- **Reset to Clean Live State (Zero Mock Data):**
+  Set `BACKEND_PORT=8080` in `.env` or start uvicorn with `--port 8080`.
+- **Reset to Clean Live Data:**
   Run `python3 scripts/reset_to_live.py`.
-- **Seed Synthetic Demo Dataset (Optional):**
-  Run `python3 scripts/seed_demo_data.py`.
 
 ---
 
