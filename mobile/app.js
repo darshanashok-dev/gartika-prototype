@@ -230,28 +230,58 @@ class GartikaMobileEdgeUnit {
 
   async startCamera() {
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false,
-        });
-        this.videoStream = stream;
-        if (this.cameraPreview) this.cameraPreview.srcObject = stream;
-        this.camStatus?.classList.add("online");
-        if (this.camFallbackMsg) this.camFallbackMsg.style.display = "none";
-        this.log("Live mobile camera active", "success");
-      } else {
-        throw new Error("Camera API restricted over HTTP");
+      const navMedia = navigator.mediaDevices;
+      if (!navMedia || !navMedia.getUserMedia) {
+        throw new Error(
+          window.location.protocol === "http:"
+            ? "Browser blocked camera on HTTP. Please open HTTPS URL (https://<IP>:8000/mobile) or use Chrome flag."
+            : "MediaDevices not supported in this browser"
+        );
       }
+
+      let stream = null;
+      // Try 1: Back camera with ideal resolution
+      try {
+        stream = await navMedia.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 }
+          },
+          audio: false
+        });
+      } catch (e1) {
+        // Try 2: Any available camera (e.g. front or standard)
+        try {
+          stream = await navMedia.getUserMedia({
+            video: true,
+            audio: false
+          });
+        } catch (e2) {
+          throw e2;
+        }
+      }
+
+      this.videoStream = stream;
+      if (this.cameraPreview) {
+        this.cameraPreview.srcObject = stream;
+        await this.cameraPreview.play().catch(() => {});
+      }
+      this.camStatus?.classList.add("online");
+      if (this.camFallbackMsg) this.camFallbackMsg.style.display = "none";
+      if (this.simCanvas) this.simCanvas.style.display = "none";
+      this.log("Live mobile camera feed connected", "success");
     } catch (err) {
       this.camStatus?.classList.remove("online");
       if (this.camFallbackMsg) {
         this.camFallbackMsg.style.display = "flex";
         if (this.camNoticeText) {
-          this.camNoticeText.innerText = "HTTP Mode: Tap 'Snap & Send Road Photo' above or simulation active";
+          this.camNoticeText.innerHTML = window.location.protocol === "http:"
+            ? `Open via HTTPS: <strong>https://${window.location.host}/mobile</strong> for continuous stream`
+            : `Camera access denied: ${err.message}`;
         }
       }
-      this.log(`Camera notice: ${err.message}. Synthetic road stream active.`, "info");
+      this.log(`Camera notice: ${err.message}`, "warn");
       this.startSyntheticRoadStream();
     }
   }

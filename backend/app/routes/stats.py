@@ -35,6 +35,7 @@ def health_check(db: Session = Depends(get_db)):
     }
 
 @router.get("/stats")
+@router.get("/stats/summary")
 def get_stats(db: Session = Depends(get_db)):
     """System-wide summary statistics for dashboard with accurate counts."""
     now_utc = datetime.now(timezone.utc)
@@ -76,7 +77,9 @@ def get_stats(db: Session = Depends(get_db)):
         "total_buses": total_buses,
         "events_today": total_events,
         "road_defects": road_defects,
+        "total_potholes": road_defects,
         "vehicles_detected": int(sum_vehicles),
+        "total_vehicles": int(sum_vehicles),
         "high_priority_events": high_priority,
         "total_work_orders": total_work_orders,
         "open_work_orders": open_work_orders,

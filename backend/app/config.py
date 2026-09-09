@@ -41,6 +41,9 @@ class Settings:
     DASHBOARD_DIST: Path = BASE_DIR / "dashboard"
     
     LOCAL_IP: str = get_local_ip()
+    SSL_CERT_PATH: Path = BASE_DIR / os.getenv("SSL_CERT_PATH", "cert.pem")
+    SSL_KEY_PATH: Path = BASE_DIR / os.getenv("SSL_KEY_PATH", "key.pem")
+    USE_HTTPS: bool = os.getenv("USE_HTTPS", "true").lower() in ("true", "1", "yes")
 
 settings = Settings()
 

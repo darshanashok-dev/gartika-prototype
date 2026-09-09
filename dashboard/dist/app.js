@@ -645,8 +645,10 @@ class GartikaCommandCenter {
       }
     } catch (e) {}
 
+    const proto = window.location.protocol;
+    const port = window.location.port ? `:${window.location.port}` : '';
     const host = this.localIp !== 'localhost' && this.localIp !== '127.0.0.1' ? this.localIp : (window.location.hostname || 'localhost');
-    const mobileUrl = `http://${host}:8000/mobile`;
+    const mobileUrl = `${proto}//${host}${port}/mobile`;
     
     if (this.mobileConnectUrl) {
       this.mobileConnectUrl.value = mobileUrl;
@@ -655,8 +657,9 @@ class GartikaCommandCenter {
     if (this.qrCodeContainer) {
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=2&color=ffffff&bgcolor=121215&data=${encodeURIComponent(mobileUrl)}`;
       this.qrCodeContainer.innerHTML = `
-        <div style="padding:8px; background:#121215; border:1px solid rgba(255,255,255,0.12); border-radius:8px;">
-          <img src="${qrApiUrl}" width="140" height="140" alt="QR Code" style="display:block; border-radius:4px;" onerror="this.outerHTML='<div style=padding:16px;color:#a1a1aa;font-size:12px;>Open URL in Phone</div>'" />
+        <div style="padding:8px; background:#121215; border:1px solid rgba(255,255,255,0.12); border-radius:8px; text-align:center;">
+          <img src="${qrApiUrl}" width="140" height="140" alt="QR Code" style="display:block; margin:0 auto; border-radius:4px;" onerror="this.outerHTML='<div style=padding:16px;color:#a1a1aa;font-size:12px;>Open URL in Phone</div>'" />
+          <div style="margin-top:6px; font-size:10px; color:#a1a1aa;">Scan or visit URL on mobile</div>
         </div>
       `;
     }

@@ -24,19 +24,21 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("[DB] Database initialized successfully.")
     
+    scheme = "https" if (settings.USE_HTTPS and settings.SSL_CERT_PATH.exists() and settings.SSL_KEY_PATH.exists()) else "http"
     print("\n" + "=" * 45)
     print("        GARTIKA PROTOTYPE")
     print("  AI-Powered Urban Intelligence")
     print("=" * 45)
     print(f"\nBackend API & Swagger Docs:")
-    print(f"  http://localhost:{settings.BACKEND_PORT}")
-    print(f"  http://localhost:{settings.BACKEND_PORT}/docs")
+    print(f"  {scheme}://localhost:{settings.BACKEND_PORT}")
+    print(f"  {scheme}://localhost:{settings.BACKEND_PORT}/docs")
     print(f"\nDashboard:")
-    print(f"  http://localhost:{settings.BACKEND_PORT} or http://localhost:{settings.DASHBOARD_PORT}")
+    print(f"  {scheme}://localhost:{settings.BACKEND_PORT}")
     print(f"\nMobile Edge Unit (Open on Smartphone):")
-    print(f"  http://{settings.LOCAL_IP}:{settings.BACKEND_PORT}/mobile")
+    print(f"  {scheme}://{settings.LOCAL_IP}:{settings.BACKEND_PORT}/mobile")
     print(f"\nMode: {'DEMO' if settings.DEMO_MODE else 'LIVE'}")
     print(f"Bus ID: {settings.GARTIKA_BUS_ID}")
+    print(f"Protocol: {scheme.upper()} (Live Camera: {'ENABLED' if scheme == 'https' else 'HTTP mode'})")
     print("=" * 45 + "\n")
     
     yield
@@ -110,9 +112,14 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
+    ssl_cert = str(settings.SSL_CERT_PATH) if (settings.USE_HTTPS and settings.SSL_CERT_PATH.exists()) else None
+    ssl_key = str(settings.SSL_KEY_PATH) if (settings.USE_HTTPS and settings.SSL_KEY_PATH.exists()) else None
+
     uvicorn.run(
         "backend.app.main:app",
         host=settings.BACKEND_HOST,
         port=settings.BACKEND_PORT,
-        reload=False
+        reload=False,
+        ssl_certfile=ssl_cert,
+        ssl_keyfile=ssl_key
     )

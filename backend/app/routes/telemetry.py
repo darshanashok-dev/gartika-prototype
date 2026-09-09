@@ -152,3 +152,13 @@ def get_bus_telemetry(
     """Get recent telemetry for a given bus with pagination."""
     records = db.query(Telemetry).filter(Telemetry.bus_id == bus_id).order_by(desc(Telemetry.timestamp)).offset(offset).limit(limit).all()
     return records
+
+@router.get("/latest", response_model=TelemetryResponse)
+def get_latest_telemetry(bus_id: str = Query("BUS-101"), db: Session = Depends(get_db)):
+    """Get the latest telemetry record for a bus."""
+    record = db.query(Telemetry).filter(Telemetry.bus_id == bus_id).order_by(desc(Telemetry.timestamp)).first()
+    if not record:
+        record = db.query(Telemetry).order_by(desc(Telemetry.timestamp)).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="No telemetry available")
+    return record
