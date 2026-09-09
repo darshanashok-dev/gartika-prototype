@@ -23,16 +23,23 @@ cp dashboard/index.html dashboard/styles.css dashboard/app.js dashboard/dist/ 2>
 
 LOCAL_IP=$(python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); (s.connect(('8.8.8.8', 80)), print(s.getsockname()[0]), s.close()) if True else None" 2>/dev/null || echo "127.0.0.1")
 
+# Determine protocol
+if [ -f "cert.pem" ] && [ -f "key.pem" ]; then
+    PROTO="https"
+else
+    PROTO="http"
+fi
+
 echo ""
 echo "====================================="
 echo "        GARTIKA PROTOTYPE"
 echo "====================================="
 echo ""
 echo "Backend & GIS Dashboard:"
-echo "http://localhost:8000"
+echo "${PROTO}://localhost:8000"
 echo ""
 echo "Mobile Edge Unit (Open on Smartphone):"
-echo "http://${LOCAL_IP}:8000/mobile"
+echo "${PROTO}://${LOCAL_IP}:8000/mobile"
 echo ""
 echo "Mode:"
 echo "DEMO / LIVE"
@@ -52,15 +59,15 @@ cleanup() {
 trap cleanup SIGINT SIGTERM EXIT
 
 # Start FastAPI backend
-echo "[1/2] Launching Backend Server on http://0.0.0.0:8000..."
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 &
+echo "[1/2] Launching Backend Server..."
+python3 -m backend.app.main &
 BACKEND_PID=$!
 
 sleep 2
 
 # Start AI Ingestion Engine in demo mode
 echo "[2/2] Launching AI Processing Engine on Demo Video..."
-python3 ai/video_processor.py --source demo --bus-id BUS-101 --backend-url http://localhost:8000 &
+python3 ai/video_processor.py --source demo --bus-id BUS-101 --backend-url ${PROTO}://localhost:8000 &
 AI_PID=$!
 
 echo ""

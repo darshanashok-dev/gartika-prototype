@@ -6,6 +6,9 @@ import cv2
 import requests
 import numpy as np
 from pathlib import Path
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Add project root to path
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -134,7 +137,7 @@ def run_webcam_edge(
                 try:
                     files = {"frame": ("camera.jpg", jpeg_buf.tobytes(), "image/jpeg")}
                     data = {"bus_id": bus_id}
-                    requests.post(f"{backend_url}/stream/frame", data=data, files=files, timeout=0.8)
+                    requests.post(f"{backend_url}/stream/frame", data=data, files=files, timeout=0.8, verify=False)
                 except Exception:
                     pass
 
@@ -159,7 +162,7 @@ def run_webcam_edge(
                     "az": round(az_val, 2)
                 }
                 try:
-                    requests.post(f"{backend_url}/telemetry", json=tele_payload, timeout=0.8)
+                    requests.post(f"{backend_url}/telemetry", json=tele_payload, timeout=0.8, verify=False)
                 except Exception:
                     pass
 

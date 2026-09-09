@@ -7,6 +7,9 @@ import cv2
 import numpy as np
 import logging
 from pathlib import Path
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Add project root to sys.path
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -165,7 +168,7 @@ class VideoProcessor:
         """Submit generated event to backend REST API."""
         try:
             url = f"{self.backend_url}/events"
-            resp = requests.post(url, json=event_data, timeout=3.0)
+            resp = requests.post(url, json=event_data, timeout=3.0, verify=False)
             if resp.status_code == 201:
                 logger.info(f"[POST SUCCESS] Event {event_data.get('event_id')} ingested into platform.")
             else:
@@ -187,7 +190,7 @@ class VideoProcessor:
                 "ay": round(float(np.random.normal(0.0, 0.4)), 3),
                 "az": round(float(np.random.normal(9.81, 0.2)), 3)
             }
-            requests.post(url, json=payload, timeout=2.0)
+            requests.post(url, json=payload, timeout=2.0, verify=False)
         except Exception:
             pass
 

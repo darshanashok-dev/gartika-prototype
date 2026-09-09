@@ -10,3 +10,11 @@ htmlcov/
 *.swp
 *.swo
 *~
+
+# Database & Runtime Data
+gartika.db
+gartika.db-journal
+data/evidence/
+data/videos/*.mp4
+!data/videos/.gitkeep
+
