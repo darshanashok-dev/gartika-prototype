@@ -201,11 +201,9 @@ async def upload_frame(
 def get_latest_frame():
     """
     Retrieve the most recent camera frame as raw image/jpeg for live dashboard preview.
-    
-    Returns:
-        Response: HTTP 200 with raw image/jpeg payload.
+    Returns HTTP 204 (No Content) if no frame has been uploaded yet.
     """
     global latest_frame_bytes
     if not latest_frame_bytes:
-        raise HTTPException(status_code=404, detail="No active stream frame available")
+        return Response(status_code=204)
     return Response(content=latest_frame_bytes, media_type="image/jpeg")

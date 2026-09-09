@@ -86,7 +86,7 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
         # Check for Real Accelerometer Road Bump Shock Spike (Sensor Fusion)
         az_val = t_in.az if t_in.az is not None else 9.81
         if az_val > 13.5 or abs(az_val - 9.81) > 4.0:
-            evt_code = uuid.uuid4().hex[:5].upper()
+            evt_code = uuid.uuid4().hex[:8].upper()
             evt_id = f"EVT-POTH-{evt_code}"
             
             # Check if there is a recent frame in stream module to save as evidence

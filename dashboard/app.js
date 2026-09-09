@@ -1,20 +1,15 @@
 /**
- * Gartika Urban Intelligence Command Center — Live Enterprise Client Engine.
+ * Gartika Urban Intelligence Command Center — Clean Client Engine.
  * 
- * Provides interactive GIS map visualization (Leaflet.js), live smartphone telemetry tracking,
- * real-time defect alert ingestion via WebSockets, live camera preview, and work order dispatching.
- * 
- * Strictly operates on live smartphone camera frames, real GPS coordinates, and real IMU shock alerts.
+ * Interactive GIS mapping, real-time mobile GPS tracking, live camera preview,
+ * AI defect stream ingestion via WebSockets, and municipal work order dispatching.
  */
 class GartikaCommandCenter {
-  /**
-   * Initializes state, map layer, WebSocket channels, DOM elements, and periodic polling.
-   */
   constructor() {
     this.backendUrl = window.location.origin;
     this.wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/events`;
     
-    // Core State
+    // Core Application State
     this.busLocation = null;
     this.events = [];
     this.workOrders = [];
@@ -26,7 +21,8 @@ class GartikaCommandCenter {
     this.busTrail = [];
     this.eventMarkers = {};
     this.ws = null;
-    this.localIp = 'localhost';
+    this.localIp = window.location.hostname || 'localhost';
+    this.isFirstGpsLock = true;
 
     this.initElements();
     this.initMap();
@@ -35,22 +31,20 @@ class GartikaCommandCenter {
     this.loadInitialData();
     this.startLiveStreamPolling();
 
-    // Regular polling fallback every 3.0s to ensure consistency
-    setInterval(() => this.pollUpdates(), 3000);
+    // Background sync every 4 seconds
+    setInterval(() => this.pollUpdates(), 4000);
   }
 
-  /**
-   * Cache references to UI counters, stream elements, feeds, and modals.
-   */
   initElements() {
     // KPI Counters
     this.metricActiveBuses = document.getElementById('metricActiveBuses');
     this.metricBusId = document.getElementById('metricBusId');
+    this.metricBusBadge = document.getElementById('metricBusBadge');
     this.metricRoadDefects = document.getElementById('metricRoadDefects');
     this.metricVehicles = document.getElementById('metricVehicles');
     this.metricHighPriority = document.getElementById('metricHighPriority');
 
-    // Telemetry display
+    // Telemetry HUD
     this.teleLat = document.getElementById('teleLat');
     this.teleLon = document.getElementById('teleLon');
     this.teleSpeed = document.getElementById('teleSpeed');
@@ -61,8 +55,9 @@ class GartikaCommandCenter {
     // Camera Stream
     this.liveStreamImg = document.getElementById('liveStreamImg');
     this.streamPlaceholder = document.getElementById('streamPlaceholder');
+    this.streamOverlayBadge = document.getElementById('streamOverlayBadge');
 
-    // Containers
+    // Feed and Containers
     this.eventFeedScroll = document.getElementById('eventFeedScroll');
     this.woItemsContainer = document.getElementById('woItemsContainer');
     this.woFilterSelect = document.getElementById('woFilterSelect');
@@ -83,49 +78,31 @@ class GartikaCommandCenter {
     this.modalVibration = document.getElementById('modalVibration');
     this.btnCreateWorkOrder = document.getElementById('btnCreateWorkOrder');
 
-    // Phone modal
+    // Phone Pairing Modal
     this.phoneModal = document.getElementById('phoneModal');
     this.mobileConnectUrl = document.getElementById('mobileConnectUrl');
     this.qrCodeContainer = document.getElementById('qrCodeContainer');
 
-    // Connectivity Status Nodes
-    this.pillEdge = document.getElementById('pillEdge');
-    this.pillBackend = document.getElementById('pillBackend');
-    this.pillAi = document.getElementById('pillAi');
-    this.pillWs = document.getElementById('pillWs');
+    // Live Status Badge
+    this.wsStatusDot = document.getElementById('wsStatusDot');
+    this.liveStatusText = document.getElementById('liveStatusText');
   }
 
-  /**
-   * Display floating toast notification on top-right of dashboard.
-   * @param {string} message - Notification text.
-   * @param {string} type - Notification level ('info', 'success', 'warn', 'error').
-   */
   showToast(message, type = 'info') {
     if (!this.toastContainer) return;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    
-    let svgIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
-    if (type === 'success') {
-      svgIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-    } else if (type === 'warn') {
-      svgIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
-    }
-    
-    toast.innerHTML = `<span class="toast-icon-wrap">${svgIcon}</span> <span>${message}</span>`;
+    toast.innerHTML = `<span>${message}</span>`;
     this.toastContainer.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 250);
-    }, 3200);
+    }, 3000);
   }
 
-  /**
-   * Initialize Leaflet GIS map with dark mode tiles.
-   */
   initMap() {
     try {
-      // Default view centering on Bangalore or neutral location until real GPS is received
+      // Default view centering (neutral view until phone GPS connects)
       const initialCenter = [12.971598, 77.594562];
       this.map = L.map('gisMap', {
         center: initialCenter,
@@ -157,14 +134,13 @@ class GartikaCommandCenter {
     }
   }
 
-  /**
-   * Connect to real-time WebSocket channel and register reconnection lifecycle listeners.
-   */
   initWebSocket() {
     try {
       this.ws = new WebSocket(this.wsUrl);
+      
       this.ws.onopen = () => {
-        this.updateNodeStatus(this.pillWs, true, 'Connected');
+        if (this.wsStatusDot) this.wsStatusDot.className = 'dot-led online';
+        if (this.liveStatusText) this.liveStatusText.innerHTML = 'Live System: <strong>Online</strong>';
       };
 
       this.ws.onmessage = (event) => {
@@ -175,39 +151,20 @@ class GartikaCommandCenter {
       };
 
       this.ws.onerror = () => {
-        this.updateNodeStatus(this.pillWs, false, 'Offline');
+        if (this.wsStatusDot) this.wsStatusDot.className = 'dot-led';
+        if (this.liveStatusText) this.liveStatusText.innerHTML = 'Live System: <strong>Connecting...</strong>';
       };
 
       this.ws.onclose = () => {
-        this.updateNodeStatus(this.pillWs, false, 'Reconnecting');
+        if (this.wsStatusDot) this.wsStatusDot.className = 'dot-led';
+        if (this.liveStatusText) this.liveStatusText.innerHTML = 'Live System: <strong>Reconnecting</strong>';
         setTimeout(() => this.initWebSocket(), 4000);
       };
     } catch (e) {
-      this.updateNodeStatus(this.pillWs, false, 'Error');
+      console.warn('[WS] Error:', e);
     }
   }
 
-  /**
-   * Update top navigation LED pill status.
-   * @param {HTMLElement} el - Pill DOM element.
-   * @param {boolean} isOnline - Whether state is healthy.
-   * @param {string} text - Label text.
-   */
-  updateNodeStatus(el, isOnline, text) {
-    if (!el) return;
-    const dot = el.querySelector('.dot-led');
-    const strong = el.querySelector('strong');
-    if (dot) {
-      dot.className = `dot-led ${isOnline ? 'online' : 'offline'}`;
-    }
-    if (strong) {
-      strong.innerText = text;
-    }
-  }
-
-  /**
-   * Bind event listeners to UI toolbar buttons, modals, and tab filters.
-   */
   bindEvents() {
     document.getElementById('btnConnectPhone')?.addEventListener('click', () => this.openPhoneModal());
     document.getElementById('phoneModalClose')?.addEventListener('click', () => this.closePhoneModal());
@@ -216,7 +173,7 @@ class GartikaCommandCenter {
     document.getElementById('btnCopyMobileUrl')?.addEventListener('click', () => {
       const url = this.mobileConnectUrl.value;
       navigator.clipboard?.writeText(url);
-      this.showToast('Mobile URL copied to clipboard', 'success');
+      this.showToast('Mobile URL copied to clipboard!', 'success');
     });
 
     document.getElementById('btnCenterBus')?.addEventListener('click', () => this.centerOnBus());
@@ -238,7 +195,7 @@ class GartikaCommandCenter {
 
     document.getElementById('btnRefreshEvents')?.addEventListener('click', () => {
       this.loadInitialData();
-      this.showToast('Synchronized detections', 'info');
+      this.showToast('Synchronized with live backend', 'info');
     });
 
     document.getElementById('modalCloseBtn')?.addEventListener('click', () => this.closeEventModal());
@@ -246,9 +203,6 @@ class GartikaCommandCenter {
     this.btnCreateWorkOrder?.addEventListener('click', () => this.dispatchWorkOrderFromModal());
   }
 
-  /**
-   * Fetch initial batch of system health, stats, events, work orders, and bus coordinates.
-   */
   async loadInitialData() {
     await Promise.all([
       this.loadHealth(),
@@ -259,88 +213,62 @@ class GartikaCommandCenter {
     ]);
   }
 
-  /**
-   * Background polling fallback to refresh stats and coordinates.
-   */
   async pollUpdates() {
     await Promise.all([
       this.loadStats(),
-      this.loadBusTelemetry(),
-      this.loadWorkOrders()
+      this.loadBusTelemetry()
     ]);
   }
 
-  /**
-   * Check backend health and update status pills.
-   */
   async loadHealth() {
     try {
       const res = await fetch(`${this.backendUrl}/health`);
       if (res.ok) {
         const data = await res.json();
-        this.localIp = data.local_ip || window.location.hostname || 'localhost';
-        this.updateNodeStatus(this.pillBackend, true, 'Healthy');
-        this.updateNodeStatus(this.pillAi, true, 'Ready');
-      }
-    } catch (e) {
-      this.updateNodeStatus(this.pillBackend, false, 'Degraded');
-    }
-  }
-
-  /**
-   * Fetch statistical summary counters and update KPI widgets.
-   */
-  async loadStats() {
-    try {
-      const res = await fetch(`${this.backendUrl}/stats/summary`);
-      if (res.ok) {
-        const stats = await res.json();
-        if (this.metricActiveBuses) this.metricActiveBuses.innerHTML = `${stats.active_buses || 0} <span class="metric-unit">Units</span>`;
-        if (this.metricRoadDefects) this.metricRoadDefects.innerText = stats.total_potholes || 0;
-        if (this.metricVehicles) this.metricVehicles.innerHTML = `${stats.total_vehicles || 0} <span class="metric-unit">Vehicles</span>`;
-        if (this.metricHighPriority) this.metricHighPriority.innerText = `${stats.high_priority_events || 0} Critical`;
-        
-        if (stats.active_buses > 0) {
-          if (this.metricBusId) this.metricBusId.innerText = 'BUS-101 (Connected)';
-          this.updateNodeStatus(this.pillEdge, true, 'Active');
-        } else {
-          if (this.metricBusId) this.metricBusId.innerText = 'Awaiting connection...';
-          this.updateNodeStatus(this.pillEdge, false, 'Listening');
+        if (data.local_ip && this.mobileConnectUrl) {
+          const proto = window.location.protocol;
+          const port = window.location.port ? `:${window.location.port}` : '';
+          this.mobileConnectUrl.value = `${proto}//${data.local_ip}${port}/mobile`;
+          this.updateQrCode(this.mobileConnectUrl.value);
         }
       }
     } catch (e) {}
   }
 
-  /**
-   * Load recent AI detection events from /events.
-   */
+  async loadStats() {
+    try {
+      const res = await fetch(`${this.backendUrl}/stats/summary`);
+      if (res.ok) {
+        const s = await res.json();
+        if (this.metricActiveBuses) this.metricActiveBuses.innerHTML = `${s.active_buses || 0} <span class="metric-unit">Units</span>`;
+        if (this.metricRoadDefects) this.metricRoadDefects.innerText = s.road_defects || 0;
+        if (this.metricHighPriority) this.metricHighPriority.innerText = `${s.high_priority_events || 0} Critical`;
+        if (this.metricVehicles) this.metricVehicles.innerHTML = `${s.vehicles_detected || 0} <span class="metric-unit">Vehicles</span>`;
+      }
+    } catch (e) {}
+  }
+
   async loadEvents() {
     try {
       const res = await fetch(`${this.backendUrl}/events?limit=40`);
       if (res.ok) {
         this.events = await res.json();
         this.renderEventFeed();
-        this.plotEventMarkers();
+        this.renderEventMarkersOnMap();
       }
     } catch (e) {}
   }
 
-  /**
-   * Load all maintenance work orders from /work-orders.
-   */
   async loadWorkOrders() {
     try {
       const res = await fetch(`${this.backendUrl}/work-orders`);
       if (res.ok) {
         this.workOrders = await res.json();
-        this.renderWorkOrders(this.woFilterSelect?.value || 'ALL');
+        this.renderWorkOrders();
       }
     } catch (e) {}
   }
 
-  /**
-   * Load latest GPS and IMU telemetry observation for BUS-101.
-   */
   async loadBusTelemetry() {
     try {
       const res = await fetch(`${this.backendUrl}/telemetry/latest?bus_id=BUS-101`);
@@ -351,55 +279,43 @@ class GartikaCommandCenter {
     } catch (e) {}
   }
 
-  /**
-   * Update HUD telemetry labels, marker position, and polyline trail.
-   * @param {Object} tel - Telemetry payload.
-   */
   updateBusTelemetryUI(tel) {
     if (!tel || tel.latitude === undefined || tel.longitude === undefined) return;
     
-    if (this.teleLat) this.teleLat.innerText = tel.latitude.toFixed(4);
-    if (this.teleLon) this.teleLon.innerText = tel.longitude.toFixed(4);
+    if (this.teleLat) this.teleLat.innerText = tel.latitude !== null ? tel.latitude.toFixed(4) : '--';
+    if (this.teleLon) this.teleLon.innerText = tel.longitude !== null ? tel.longitude.toFixed(4) : '--';
     if (this.teleSpeed) this.teleSpeed.innerText = `${(tel.speed || 0.0).toFixed(1)} km/h`;
 
     const az = tel.az !== undefined ? tel.az : 9.81;
     if (this.imuValStatus) {
-      if (az > 13.5 || Math.abs(az - 9.81) > 4.0) {
-        this.imuValStatus.innerHTML = `<span style="color:var(--accent-red); font-weight:700;">${az.toFixed(2)} m/s² (Bump Shock)</span>`;
+      if (Math.abs(az - 9.81) > 3.0) {
+        this.imuValStatus.innerHTML = `<span style="color:var(--accent-red); font-weight:700;">${az.toFixed(2)} m/s² (Bump)</span>`;
       } else {
-        this.imuValStatus.innerText = `${az.toFixed(2)} m/s² (Normal)`;
+        this.imuValStatus.innerText = `${az.toFixed(2)} m/s²`;
       }
     }
+
+    if (this.metricBusId) this.metricBusId.innerText = `${tel.bus_id || 'BUS-101'} (Active)`;
+    if (this.metricBusBadge) this.metricBusBadge.innerText = 'Online';
 
     if (tel.latitude && tel.longitude) {
       const newPos = [tel.latitude, tel.longitude];
       this.busLocation = newPos;
 
       if (!this.busMarker) {
-        const busHtml = `
-          <div class="marker-bus-clean">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2">
-              <rect x="3" y="6" width="18" height="12" rx="2"></rect>
-              <circle cx="7" cy="18" r="2"></circle>
-              <circle cx="17" cy="18" r="2"></circle>
-            </svg>
-          </div>
-        `;
         const busIcon = L.divIcon({
           className: 'custom-bus-icon',
-          html: busHtml,
-          iconSize: [26, 26],
-          iconAnchor: [13, 13],
+          html: `<div class="marker-bus-pulse"></div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
         });
         this.busMarker = L.marker(newPos, { icon: busIcon }).addTo(this.map);
-        this.busMarker.bindPopup(`
-          <div style="font-size:12px; padding:4px;">
-            <strong style="color:#3b82f6;">${tel.bus_id || 'BUS-101'}</strong><br>
-            Live Mobile Sensing Unit<br>
-            Status: Active
-          </div>
-        `);
-        this.map.setView(newPos, 16);
+        this.busMarker.bindPopup(`<strong>${tel.bus_id || 'BUS-101'}</strong><br>Live Sensing Unit`);
+        
+        if (this.isFirstGpsLock) {
+          this.map.setView(newPos, 16);
+          this.isFirstGpsLock = false;
+        }
       } else {
         this.busMarker.setLatLng(newPos);
       }
@@ -410,375 +326,299 @@ class GartikaCommandCenter {
     }
   }
 
-  /**
-   * Poll latest video frame snapshot from /stream/latest-frame for live preview feed.
-   */
   startLiveStreamPolling() {
-    let errCount = 0;
-    setInterval(() => {
-      if (!this.liveStreamImg) return;
-      const img = new Image();
-      const ts = new Date().getTime();
-      img.src = `${this.backendUrl}/stream/latest-frame?t=${ts}`;
-      img.onload = () => {
-        this.liveStreamImg.src = img.src;
-        if (this.streamPlaceholder) this.streamPlaceholder.style.display = 'none';
-        errCount = 0;
-      };
-      img.onerror = () => {
-        errCount++;
-        if (errCount > 2 && this.streamPlaceholder) {
-          this.streamPlaceholder.style.display = 'flex';
+    let consecutiveEmpty = 0;
+    setInterval(async () => {
+      try {
+        const ts = Date.now();
+        const res = await fetch(`${this.backendUrl}/stream/latest-frame?t=${ts}`);
+        if (res.status === 200) {
+          const blob = await res.blob();
+          if (blob.size > 0) {
+            const objectUrl = URL.createObjectURL(blob);
+            if (this.liveStreamImg) {
+              this.liveStreamImg.src = objectUrl;
+              this.liveStreamImg.style.display = 'block';
+            }
+            if (this.streamPlaceholder) this.streamPlaceholder.style.display = 'none';
+            if (this.streamOverlayBadge) this.streamOverlayBadge.style.display = 'block';
+            consecutiveEmpty = 0;
+          }
+        } else {
+          consecutiveEmpty++;
+          if (consecutiveEmpty > 3) {
+            if (this.liveStreamImg) this.liveStreamImg.style.display = 'none';
+            if (this.streamPlaceholder) this.streamPlaceholder.style.display = 'flex';
+            if (this.streamOverlayBadge) this.streamOverlayBadge.style.display = 'none';
+          }
         }
-      };
-    }, 800);
+      } catch (e) {}
+    }, 1000);
   }
 
-  /**
-   * Dispatch actions for incoming WebSocket messages (NEW_EVENT, TELEMETRY, etc).
-   * @param {Object} payload - Received WebSocket payload.
-   */
   handleIncomingEvent(payload) {
     if (!payload || !payload.type) return;
 
     if (payload.type === 'NEW_EVENT' && payload.data) {
       const evt = payload.data;
       this.events.unshift(evt);
-      if (this.events.length > 40) this.events.pop();
+      if (this.events.length > 50) this.events.pop();
 
       this.renderEventFeed();
       this.addEventMarkerToMap(evt);
+      this.showToast(`New ${evt.event_type}: ${evt.event_id}`, 'warn');
       this.loadStats();
-
-      if (evt.event_type === 'POTHOLE' || evt.severity === 'HIGH') {
-        this.showToast(`Real road defect detected at ${evt.latitude?.toFixed(4)}, ${evt.longitude?.toFixed(4)}`, 'warn');
-      }
-    } else if ((payload.type === 'TELEMETRY_UPDATE' || payload.type === 'TELEMETRY') && payload.data) {
+    } else if (payload.type === 'TELEMETRY' && payload.data) {
       this.updateBusTelemetryUI(payload.data);
-      this.loadStats();
-    } else if (payload.type === 'NEW_WORK_ORDER' || payload.type === 'UPDATE_WORK_ORDER') {
+    } else if (payload.type === 'WORK_ORDER_UPDATE') {
       this.loadWorkOrders();
     }
   }
 
-  /**
-   * Render filtered event cards into the detection feed sidebar.
-   */
   renderEventFeed() {
     if (!this.eventFeedScroll) return;
-    
+
     let filtered = this.events;
     if (this.activeFeedFilter === 'POTHOLE') {
-      filtered = this.events.filter(e => e.event_type === 'POTHOLE');
+      filtered = this.events.filter(e => e.event_type === 'POTHOLE' || e.event_type === 'ROAD_DEFECT');
     } else if (this.activeFeedFilter === 'VEHICLE_COUNT') {
-      filtered = this.events.filter(e => e.event_type === 'VEHICLE_COUNT');
+      filtered = this.events.filter(e => e.event_type === 'VEHICLE_COUNT' || e.event_type === 'TRAFFIC');
     } else if (this.activeFeedFilter === 'HIGH') {
-      filtered = this.events.filter(e => e.severity === 'HIGH');
+      filtered = this.events.filter(e => e.severity === 'HIGH' || e.severity === 'CRITICAL');
     }
 
     if (filtered.length === 0) {
       this.eventFeedScroll.innerHTML = `
         <div class="empty-state">
-          <p>No detections matching filter '${this.activeFeedFilter}'</p>
+          <p>Awaiting live detections from mobile camera stream...</p>
         </div>
       `;
       return;
     }
 
-    this.eventFeedScroll.innerHTML = '';
-    filtered.forEach((evt) => {
-      const el = document.createElement('div');
-      el.className = 'feed-item';
-      
-      const confPct = Math.round((evt.confidence || 0.75) * 100);
-      const timeStr = new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const thumbSrc = evt.evidence_path || evt.evidence_image_url ? `${this.backendUrl}${evt.evidence_path || evt.evidence_image_url}` : '';
+    this.eventFeedScroll.innerHTML = filtered.map(evt => {
+      const isHigh = evt.severity === 'HIGH' || evt.severity === 'CRITICAL';
+      const badgeCls = isHigh ? 'badge-red' : (evt.event_type === 'POTHOLE' ? 'badge-amber' : 'badge-blue');
+      const timeStr = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Live';
+      const coordsStr = (evt.latitude && evt.longitude) ? `${evt.latitude.toFixed(4)}, ${evt.longitude.toFixed(4)}` : 'GPS Ingesting';
+      const thumb = evt.evidence_image_url ? `${this.backendUrl}${evt.evidence_image_url}` : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" fill="%23222"><rect width="36" height="36"/></svg>';
 
-      el.innerHTML = `
-        <div class="feed-thumb">
-          ${thumbSrc ? `<img src="${thumbSrc}" alt="Evidence" />` : `<div style="width:100%;height:100%;background:#18181b;display:flex;align-items:center;justify-content:center;color:#71717a;font-size:10px;">IMG</div>`}
-        </div>
-        <div class="feed-details">
-          <div class="feed-row-top">
-            <span class="feed-tag">${evt.event_type === 'POTHOLE' ? 'Road Defect' : 'Traffic Count'}</span>
-            <span class="feed-time font-mono">${timeStr}</span>
-          </div>
-          <div class="feed-meta font-mono">
-            <span>${evt.latitude?.toFixed(4)}, ${evt.longitude?.toFixed(4)}</span> • <span style="color:#fafafa;">${evt.bus_id}</span>
-          </div>
-          <div>
-            <div class="progress-track">
-              <div class="progress-fill" style="width: ${confPct}%; background: ${evt.severity === 'HIGH' ? '#ef4444' : '#3b82f6'};"></div>
+      return `
+        <div class="event-card-item" onclick="window.gartikaApp.openEventModal('${evt.event_id}')">
+          <div class="event-item-left">
+            <img class="event-thumb" src="${thumb}" onerror="this.style.opacity=0.3" alt="Defect" />
+            <div>
+              <div class="event-title-line">
+                <span class="badge ${badgeCls}">${evt.event_type}</span>
+                <span>${intPercent(evt.confidence)}%</span>
+              </div>
+              <div class="event-sub-line font-mono">${coordsStr} • ${evt.bus_id || 'BUS-101'}</div>
             </div>
+          </div>
+          <div class="event-item-right font-mono text-muted" style="font-size: 0.68rem;">
+            ${timeStr}
           </div>
         </div>
       `;
-
-      el.addEventListener('click', () => this.openEventModal(evt));
-      this.eventFeedScroll.appendChild(el);
-    });
+    }).join('');
   }
 
-  /**
-   * Plot all loaded event coordinates onto the GIS map.
-   */
-  plotEventMarkers() {
-    if (!this.map) return;
-    this.events.forEach((evt) => this.addEventMarkerToMap(evt));
+  renderEventMarkersOnMap() {
+    this.events.forEach(evt => this.addEventMarkerToMap(evt));
   }
 
-  /**
-   * Add an individual interactive marker for a defect or traffic event onto the map.
-   * @param {Object} evt - Event object.
-   */
   addEventMarkerToMap(evt) {
     if (!this.map || !evt.latitude || !evt.longitude) return;
-    if (this.eventMarkers[evt.id || evt.event_id]) return;
+    if (this.eventMarkers[evt.event_id]) return;
 
-    const isPothole = evt.event_type === 'POTHOLE';
-    const markerHtml = `
-      <div class="marker-pothole-clean" style="background:${isPothole ? '#ef4444' : '#f59e0b'};"></div>
-    `;
-
+    const isPothole = evt.event_type === 'POTHOLE' || evt.event_type === 'ROAD_DEFECT';
+    const markerColor = isPothole ? '#ef4444' : '#f59e0b';
+    
     const icon = L.divIcon({
-      className: 'custom-defect-icon',
-      html: markerHtml,
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
+      className: 'custom-event-icon',
+      html: `<div class="marker-defect-dot" style="background: ${markerColor};"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
     });
 
     const marker = L.marker([evt.latitude, evt.longitude], { icon }).addTo(this.map);
     marker.bindPopup(`
-      <div style="font-size:12px; padding:4px;">
-        <strong>${isPothole ? 'Pothole Defect' : 'Traffic Hub'}</strong><br>
-        Severity: <span style="color:${evt.severity === 'HIGH' ? '#ef4444' : '#3b82f6'}; font-weight:700;">${evt.severity}</span> • Conf: ${Math.round((evt.confidence || 0.75)*100)}%<br>
-        <button style="margin-top:6px; background:#2563eb; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600;" id="popupBtn_${evt.event_id || evt.id}">Inspect & Dispatch</button>
+      <div style="font-size: 12px; padding: 4px;">
+        <strong style="color: ${markerColor};">${evt.event_type}</strong> (${intPercent(evt.confidence)}%)<br>
+        Severity: <strong>${evt.severity || 'MEDIUM'}</strong><br>
+        <a href="javascript:void(0)" onclick="window.gartikaApp.openEventModal('${evt.event_id}')" style="color: #3b82f6; text-decoration: underline;">Inspect Details</a>
       </div>
     `);
 
-    marker.on('popupopen', () => {
-      document.getElementById(`popupBtn_${evt.event_id || evt.id}`)?.addEventListener('click', () => {
-        this.openEventModal(evt);
-      });
-    });
-
-    this.eventMarkers[evt.id || evt.event_id] = marker;
+    this.eventMarkers[evt.event_id] = marker;
   }
 
-  /**
-   * Render maintenance work orders table with status dropdown controls.
-   * @param {string} statusFilter - Filter status ('ALL', 'OPEN', 'ASSIGNED', 'RESOLVED').
-   */
-  renderWorkOrders(statusFilter = 'ALL') {
+  renderWorkOrders(filterStatus = 'ALL') {
     if (!this.woItemsContainer) return;
-    
-    let filtered = this.workOrders;
-    if (statusFilter !== 'ALL') {
-      filtered = this.workOrders.filter(wo => wo.status === statusFilter);
+
+    let list = this.workOrders;
+    if (filterStatus !== 'ALL') {
+      list = list.filter(w => w.status === filterStatus);
     }
 
-    if (filtered.length === 0) {
+    if (list.length === 0) {
       this.woItemsContainer.innerHTML = `
         <div class="empty-state">
-          <p>No work orders found with status '${statusFilter}'</p>
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          <p>No active work orders. Verified defects from your mobile stream can be dispatched here.</p>
         </div>
       `;
       return;
     }
 
-    this.woItemsContainer.innerHTML = '';
-    filtered.forEach((wo) => {
-      const row = document.createElement('div');
-      row.className = 'wo-row';
-      const timeStr = new Date(wo.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+    this.woItemsContainer.innerHTML = list.map(wo => {
+      const isResolved = wo.status === 'RESOLVED';
+      const badgeCls = isResolved ? 'badge-green' : (wo.priority === 'CRITICAL' ? 'badge-red' : 'badge-blue');
 
-      row.innerHTML = `
-        <div class="wo-left">
-          <span class="wo-badge">${wo.work_order_id || wo.order_id}</span>
-          <div>
-            <div class="wo-title">${wo.title || wo.description || 'Pothole Patching Order'}</div>
-            <div class="wo-meta font-mono">${wo.latitude ? wo.latitude.toFixed(4) : '--'}, ${wo.longitude ? wo.longitude.toFixed(4) : '--'} • ${timeStr}</div>
+      return `
+        <div class="wo-item-card">
+          <div class="wo-item-left">
+            <span class="badge ${badgeCls} font-mono">${wo.work_order_id}</span>
+            <div>
+              <div class="wo-item-title">${wo.title}</div>
+              <div class="wo-item-meta font-mono">${wo.assigned_contractor || 'Municipal Works'} • ${wo.status}</div>
+            </div>
+          </div>
+          <div class="wo-item-right">
+            <select class="form-select" onchange="window.gartikaApp.updateWorkOrderStatus('${wo.work_order_id}', this.value)">
+              <option value="OPEN" ${wo.status === 'OPEN' ? 'selected' : ''}>Open</option>
+              <option value="ASSIGNED" ${wo.status === 'ASSIGNED' ? 'selected' : ''}>Assigned</option>
+              <option value="IN PROGRESS" ${wo.status === 'IN PROGRESS' ? 'selected' : ''}>In Progress</option>
+              <option value="RESOLVED" ${wo.status === 'RESOLVED' ? 'selected' : ''}>Resolved</option>
+            </select>
           </div>
         </div>
-        <div>
-          <select class="status-select-pill status-${(wo.status || 'OPEN').replace(' ', '_')}">
-            <option value="OPEN" ${wo.status === 'OPEN' ? 'selected' : ''}>Open</option>
-            <option value="ASSIGNED" ${wo.status === 'ASSIGNED' ? 'selected' : ''}>Assigned</option>
-            <option value="IN PROGRESS" ${wo.status === 'IN PROGRESS' ? 'selected' : ''}>In Progress</option>
-            <option value="RESOLVED" ${wo.status === 'RESOLVED' ? 'selected' : ''}>Resolved</option>
-          </select>
-        </div>
       `;
-
-      const select = row.querySelector('.status-select-pill');
-      select.addEventListener('change', (e) => {
-        this.updateWorkOrderStatus(wo.work_order_id || wo.id, e.target.value);
-      });
-
-      this.woItemsContainer.appendChild(row);
-    });
+    }).join('');
   }
 
-  /**
-   * Update status of a work order via PATCH request.
-   * @param {string} id - Work order ID.
-   * @param {string} newStatus - Updated status.
-   */
-  async updateWorkOrderStatus(id, newStatus) {
+  async updateWorkOrderStatus(woId, newStatus) {
     try {
-      const res = await fetch(`${this.backendUrl}/work-orders/${id}`, {
+      const res = await fetch(`${this.backendUrl}/work-orders/${woId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
-        this.showToast(`Updated Work Order status to ${newStatus}`, 'success');
+        this.showToast(`Updated ${woId} to ${newStatus}`, 'success');
         this.loadWorkOrders();
       }
     } catch (e) {
-      this.showToast('Failed to update status', 'error');
+      this.showToast('Failed to update work order', 'warn');
     }
   }
 
-  /**
-   * Open modal popup with annotated evidence image and full defect telemetry details.
-   * @param {Object} evt - Event object to display.
-   */
-  openEventModal(evt) {
+  openEventModal(eventId) {
+    const evt = this.events.find(e => e.event_id === eventId);
+    if (!evt) return;
+
     this.selectedEvent = evt;
-    if (!this.eventModal) return;
+    if (this.modalEventTitle) this.modalEventTitle.innerText = `${evt.event_type} Hazard Inspection`;
+    if (this.modalEventId) this.modalEventId.innerText = evt.event_id;
+    if (this.modalEventType) this.modalEventType.innerText = evt.event_type;
+    if (this.modalConfidence) this.modalConfidence.innerText = `${intPercent(evt.confidence)}%`;
+    if (this.modalBusId) this.modalBusId.innerText = evt.bus_id || 'BUS-101';
+    if (this.modalLocation) this.modalLocation.innerText = (evt.latitude && evt.longitude) ? `${evt.latitude.toFixed(5)}, ${evt.longitude.toFixed(5)}` : 'Awaiting GPS';
+    if (this.modalTimestamp) this.modalTimestamp.innerText = evt.timestamp ? new Date(evt.timestamp).toLocaleString() : 'Just now';
 
-    this.modalSeverityTag.innerText = `${evt.severity || 'HIGH'} SEVERITY`;
-    this.modalSeverityTag.className = `badge ${evt.severity === 'HIGH' ? 'badge-red' : 'badge-subtle'}`;
-    this.modalEventTitle.innerText = evt.event_type === 'POTHOLE' ? 'Road Pothole Defect' : 'Traffic Count Event';
-    this.modalEventId.innerText = evt.event_id || evt.id;
-    this.modalEventType.innerText = evt.event_type || 'POTHOLE';
-    this.modalConfidence.innerText = `${Math.round((evt.confidence || 0.85) * 100)}%`;
-    this.modalBusId.innerText = evt.bus_id || 'BUS-101';
-    this.modalLocation.innerText = evt.latitude && evt.longitude ? `${evt.latitude.toFixed(6)}, ${evt.longitude.toFixed(6)}` : '--';
-    this.modalTimestamp.innerText = new Date(evt.timestamp).toLocaleString();
-
-    const imgUrl = evt.evidence_path || evt.evidence_image_url;
-    if (imgUrl) {
-      this.modalEvidenceImg.src = `${this.backendUrl}${imgUrl}`;
-      this.modalEvidenceImg.style.display = 'block';
-      this.modalEvidenceFallback.style.display = 'none';
-    } else {
-      this.modalEvidenceImg.style.display = 'none';
-      this.modalEvidenceFallback.style.display = 'flex';
+    if (this.modalEvidenceImg) {
+      if (evt.evidence_image_url) {
+        this.modalEvidenceImg.src = `${this.backendUrl}${evt.evidence_image_url}`;
+        this.modalEvidenceImg.style.display = 'block';
+        if (this.modalEvidenceFallback) this.modalEvidenceFallback.style.display = 'none';
+      } else {
+        this.modalEvidenceImg.style.display = 'none';
+        if (this.modalEvidenceFallback) this.modalEvidenceFallback.style.display = 'flex';
+      }
     }
 
-    this.eventModal.classList.add('active');
+    if (this.eventModal) this.eventModal.classList.add('open');
   }
 
-  /**
-   * Close the event inspection modal.
-   */
   closeEventModal() {
-    if (this.eventModal) this.eventModal.classList.remove('active');
+    if (this.eventModal) this.eventModal.classList.remove('open');
     this.selectedEvent = null;
   }
 
-  /**
-   * Dispatch a new repair work order directly from the open event modal.
-   */
   async dispatchWorkOrderFromModal() {
     if (!this.selectedEvent) return;
-    const evt = this.selectedEvent;
-
-    const payload = {
-      event_id: evt.event_id || evt.id,
-      title: `Repair ${evt.event_type} (${evt.severity || 'HIGH'})`,
-      priority: evt.severity === 'HIGH' ? 'HIGH' : 'MEDIUM',
-      assigned_to: 'BBMP Road Maintenance Crew Alpha',
-      description: `Fix ${evt.severity || 'HIGH'} defect reported by ${evt.bus_id} at Lat: ${evt.latitude?.toFixed(4)}, Lon: ${evt.longitude?.toFixed(4)}`
-    };
-
     try {
       const res = await fetch(`${this.backendUrl}/work-orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          event_id: this.selectedEvent.event_id,
+          title: `Civic Repair: ${this.selectedEvent.event_type} (${intPercent(this.selectedEvent.confidence)}% Conf)`,
+          priority: this.selectedEvent.severity || 'HIGH',
+          assigned_contractor: 'BBMP Road Maintenance Crew'
+        })
       });
 
       if (res.ok) {
-        this.showToast('Repair Work Order Dispatched', 'success');
+        this.showToast('Repair work order dispatched successfully!', 'success');
         this.closeEventModal();
         this.loadWorkOrders();
+      } else {
+        this.showToast('Work order already exists for this event.', 'info');
+        this.closeEventModal();
       }
     } catch (e) {
-      this.showToast('Failed to dispatch order', 'error');
+      this.showToast('Failed to dispatch work order', 'warn');
     }
   }
 
-  /**
-   * Open the phone connection modal showing QR code and network URL.
-   */
-  async openPhoneModal() {
-    if (!this.phoneModal) return;
-    try {
-      const res = await fetch(`${this.backendUrl}/health`);
-      if (res.ok) {
-        const data = await res.json();
-        this.localIp = data.local_ip || window.location.hostname || 'localhost';
-      }
-    } catch (e) {}
-
-    const proto = window.location.protocol;
-    const port = window.location.port ? `:${window.location.port}` : '';
-    const host = this.localIp !== 'localhost' && this.localIp !== '127.0.0.1' ? this.localIp : (window.location.hostname || 'localhost');
-    const mobileUrl = `${proto}//${host}${port}/mobile`;
-    
-    if (this.mobileConnectUrl) {
-      this.mobileConnectUrl.value = mobileUrl;
-    }
-
-    if (this.qrCodeContainer) {
-      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=2&color=ffffff&bgcolor=121215&data=${encodeURIComponent(mobileUrl)}`;
-      this.qrCodeContainer.innerHTML = `
-        <div style="padding:8px; background:#121215; border:1px solid rgba(255,255,255,0.12); border-radius:8px; text-align:center;">
-          <img src="${qrApiUrl}" width="140" height="140" alt="QR Code" style="display:block; margin:0 auto; border-radius:4px;" onerror="this.outerHTML='<div style=padding:16px;color:#a1a1aa;font-size:12px;>Open URL in Phone</div>'" />
-          <div style="margin-top:6px; font-size:10px; color:#a1a1aa;">Scan on smartphone to start sensing</div>
-        </div>
-      `;
-    }
-
-    this.phoneModal.classList.add('active');
+  openPhoneModal() {
+    if (this.phoneModal) this.phoneModal.classList.add('open');
   }
 
-  /**
-   * Close the phone connection modal.
-   */
   closePhoneModal() {
-    if (this.phoneModal) this.phoneModal.classList.remove('active');
+    if (this.phoneModal) this.phoneModal.classList.remove('open');
   }
 
-  /**
-   * Smoothly pan and zoom GIS map to the phone's current GPS location.
-   */
+  updateQrCode(url) {
+    if (!this.qrCodeContainer) return;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=4&data=${encodeURIComponent(url)}`;
+    this.qrCodeContainer.innerHTML = `<img src="${qrUrl}" alt="QR Code" style="width:134px; height:134px;" />`;
+  }
+
   centerOnBus() {
-    if (this.map && this.busLocation) {
-      this.map.flyTo(this.busLocation, 16, { animate: true, duration: 1.0 });
+    if (this.busLocation && this.map) {
+      this.map.setView(this.busLocation, 16);
+      this.showToast('Centered on mobile sensor', 'info');
+    } else {
+      this.showToast('Awaiting GPS lock from mobile phone', 'warn');
     }
   }
 
-  /**
-   * Adjust GIS map bounds to fit the phone GPS and all recorded defect markers in one view.
-   */
   fitMapBounds() {
     if (!this.map) return;
-    const group = [];
-    if (this.busLocation) group.push(this.busLocation);
+    const coords = [];
+    if (this.busLocation) coords.push(this.busLocation);
     this.events.forEach(e => {
-      if (e.latitude && e.longitude) group.push([e.latitude, e.longitude]);
+      if (e.latitude && e.longitude) coords.push([e.latitude, e.longitude]);
     });
-    if (group.length > 0) {
-      this.map.fitBounds(L.latLngBounds(group).pad(0.1));
+
+    if (coords.length > 0) {
+      this.map.fitBounds(L.latLngBounds(coords), { padding: [40, 40] });
     }
   }
 }
 
-// Instantiate command center on DOM load
+function intPercent(val) {
+  if (!val) return 85;
+  if (val <= 1.0) return Math.round(val * 100);
+  return Math.round(val);
+}
+
+// Instantiate global app instance
 document.addEventListener('DOMContentLoaded', () => {
   window.gartikaApp = new GartikaCommandCenter();
 });
