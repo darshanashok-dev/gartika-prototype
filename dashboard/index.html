@@ -3,353 +3,394 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gartika — AI Urban Intelligence Command Center</title>
+  <title>Gartika — AI Mobile Urban Intelligence Command Center</title>
   
-  <!-- Leaflet CSS -->
+  <!-- Leaflet GIS CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <!-- Fonts -->
+  <!-- Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="dashboard-layout">
+  <div class="app-container">
     
-    <!-- Top Navigation / Header -->
-    <header class="top-nav">
-      <div class="nav-left">
-        <div class="logo-mark">
-          <span class="logo-icon">▲</span>
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-badge">
+          <span class="brand-triangle">▲</span>
         </div>
-        <div class="brand-titles">
+        <div class="brand-text">
           <div class="brand-name">GARTIKA <span class="badge-sih">SIH 2026</span></div>
-          <div class="brand-tagline">AI-Powered Mobile Urban Intelligence Platform • <em>Sense. Analyze. Predict. Act.</em></div>
+          <div class="brand-sub">AI Mobile Urban Intelligence Platform • <em>Sense. Analyze. Predict. Act.</em></div>
         </div>
       </div>
 
-      <!-- System Status Bar -->
-      <div class="nav-center">
-        <div class="system-status-pills">
-          <div class="sys-pill online" id="statusEdge">
-            <span class="pulse-dot"></span>
-            <span>EDGE UNIT: <strong id="edgeStatusText">ONLINE</strong></span>
-          </div>
-          <div class="sys-pill online" id="statusBackend">
-            <span class="pulse-dot"></span>
-            <span>BACKEND: <strong id="backendStatusText">ONLINE</strong></span>
-          </div>
-          <div class="sys-pill online" id="statusAi">
-            <span class="pulse-dot"></span>
-            <span>AI ENGINE: <strong id="aiStatusText">ONLINE</strong></span>
-          </div>
-          <div class="sys-pill online" id="statusGps">
-            <span class="pulse-dot"></span>
-            <span>GPS: <strong id="gpsStatusText">ACTIVE</strong></span>
-          </div>
+      <!-- Live System Connectivity & Heartbeat -->
+      <div class="header-status">
+        <div class="status-pill" id="pillEdge">
+          <span class="pill-dot"></span>
+          <span class="pill-title">EDGE: <strong id="valEdge">ONLINE</strong></span>
+        </div>
+        <div class="status-pill" id="pillBackend">
+          <span class="pill-dot"></span>
+          <span class="pill-title">BACKEND: <strong id="valBackend">ONLINE</strong></span>
+        </div>
+        <div class="status-pill" id="pillAi">
+          <span class="pill-dot"></span>
+          <span class="pill-title">AI: <strong id="valAi">READY</strong></span>
+        </div>
+        <div class="status-pill" id="pillWs">
+          <span class="pill-dot"></span>
+          <span class="pill-title">WS: <strong id="valWs">SYNCED</strong></span>
         </div>
       </div>
 
-      <div class="nav-right">
-        <div class="source-toggle-badge" id="sourceBadge">
-          <span class="source-icon">📡</span>
-          <span class="source-text">SOURCE: <strong id="sourceLabel">DEMO VIDEO</strong></span>
+      <!-- Action Buttons -->
+      <div class="header-actions">
+        <div class="mode-tag" id="sourceBadge">
+          <span class="mode-icon">📡</span>
+          <span class="mode-label">SOURCE: <strong id="sourceLabel">DEMO VIDEO</strong></span>
         </div>
-        <button class="btn-action-sm" id="btnMobileUrl" title="Mobile Edge Connect Info">
+        <button class="btn-clean" id="btnConnectPhone" title="Connect Phone Sensor">
           📱 Connect Phone
         </button>
-        <button class="btn-action-sm primary" id="btnSeedData" title="Seed Demo Data">
-          ⚡ Seed Demo Data
+        <button class="btn-clean primary" id="btnSeedData" title="Seed Demo Detections">
+          ⚡ Seed Sample Data
         </button>
       </div>
     </header>
 
-    <!-- Key Metrics Row -->
-    <section class="metrics-row">
-      <div class="metric-card">
-        <div class="metric-icon bus-icon">🚌</div>
-        <div class="metric-info">
-          <div class="metric-label">ACTIVE BUSES</div>
-          <div class="metric-number" id="statActiveBuses">1</div>
-          <div class="metric-sub">Fleet Unit BUS-101</div>
+    <!-- Metrics Quick Glance Bar -->
+    <section class="metrics-grid">
+      <div class="metric-box">
+        <div class="metric-icon-wrap bus-accent">🚌</div>
+        <div class="metric-content">
+          <div class="metric-caption">ACTIVE BUS SENSORS</div>
+          <div class="metric-value" id="metricActiveBuses">1</div>
+          <div class="metric-footer">Fleet ID: <span id="metricBusId">BUS-101</span></div>
         </div>
       </div>
 
-      <div class="metric-card">
-        <div class="metric-icon event-icon">⚡</div>
-        <div class="metric-info">
-          <div class="metric-label">EVENTS TODAY</div>
-          <div class="metric-number" id="statTotalEvents">0</div>
-          <div class="metric-sub">Geotagged AI detections</div>
+      <div class="metric-box">
+        <div class="metric-icon-wrap event-accent">⚡</div>
+        <div class="metric-content">
+          <div class="metric-caption">TOTAL EVENTS TODAY</div>
+          <div class="metric-value" id="metricTotalEvents">0</div>
+          <div class="metric-footer">Geotagged AI detections</div>
         </div>
       </div>
 
-      <div class="metric-card danger">
-        <div class="metric-icon defect-icon">🕳️</div>
-        <div class="metric-info">
-          <div class="metric-label">ROAD DEFECTS</div>
-          <div class="metric-number" id="statRoadDefects">0</div>
-          <div class="metric-sub">Potholes & Cracks</div>
+      <div class="metric-box danger">
+        <div class="metric-icon-wrap defect-accent">🕳️</div>
+        <div class="metric-content">
+          <div class="metric-caption">ROAD DEFECTS DETECTED</div>
+          <div class="metric-value" id="metricRoadDefects">0</div>
+          <div class="metric-footer">Potholes & Cracks</div>
         </div>
       </div>
 
-      <div class="metric-card warning">
-        <div class="metric-icon traffic-icon">🚗</div>
-        <div class="metric-info">
-          <div class="metric-label">VEHICLES DETECTED</div>
-          <div class="metric-number" id="statVehicles">0</div>
-          <div class="metric-sub">ByteTrack tracked IDs</div>
+      <div class="metric-box warning">
+        <div class="metric-icon-wrap traffic-accent">🚗</div>
+        <div class="metric-content">
+          <div class="metric-caption">VEHICLES MONITORED</div>
+          <div class="metric-value" id="metricVehicles">0</div>
+          <div class="metric-footer">Traffic flow counts</div>
         </div>
       </div>
 
-      <div class="metric-card critical">
-        <div class="metric-icon priority-icon">🚨</div>
-        <div class="metric-info">
-          <div class="metric-label">HIGH PRIORITY</div>
-          <div class="metric-number" id="statHighPriority">0</div>
-          <div class="metric-sub">Action required</div>
+      <div class="metric-box critical">
+        <div class="metric-icon-wrap priority-accent">🚨</div>
+        <div class="metric-content">
+          <div class="metric-caption">HIGH PRIORITY DEFECTS</div>
+          <div class="metric-value" id="metricHighPriority">0</div>
+          <div class="metric-footer">Action required</div>
         </div>
       </div>
 
-      <div class="metric-card bandwidth-card">
-        <div class="metric-icon data-icon">📉</div>
-        <div class="metric-info">
-          <div class="metric-label">BANDWIDTH SAVINGS</div>
-          <div class="metric-number" style="color:#00f2fe;">99.97%</div>
-          <div class="metric-sub"><span class="estimate-tag">DESIGN ESTIMATE</span> ~0.035 vs 144 GB/day</div>
+      <div class="metric-box bandwidth-box">
+        <div class="metric-icon-wrap savings-accent">📉</div>
+        <div class="metric-content">
+          <div class="metric-caption">BANDWIDTH REDUCTION</div>
+          <div class="metric-value highlight-cyan">99.97%</div>
+          <div class="metric-footer"><span class="pill-micro">ESTIMATE</span> ~0.035 vs 144 GB/day</div>
         </div>
       </div>
     </section>
 
-    <!-- Main Workspace: Left Bus & Bandwidth Panel, Center GIS Map, Right Live Event Feed -->
-    <main class="main-grid">
+    <!-- Main Command Center Grid -->
+    <main class="workspace-grid">
       
-      <!-- Left Sidebar: Bus Card & Bandwidth Detail -->
-      <aside class="left-sidebar">
+      <!-- Left Column: Bus Telemetry, Live Camera Preview & Bandwidth Panel -->
+      <aside class="left-pane">
         
-        <!-- Bus Status Card -->
-        <div class="panel-card bus-panel">
-          <div class="panel-header">
-            <div class="panel-title">MOBILE SENSING UNIT</div>
-            <span class="status-chip active" id="busStatusChip">ACTIVE</span>
-          </div>
-          
-          <div class="bus-hero">
-            <div class="bus-id-large" id="cardBusId">BUS-101</div>
-            <div class="bus-name" id="cardBusName">BMTC Urban Sense (Electric)</div>
-            <div class="bus-route">Route 335E: Majestic ➔ Whitefield</div>
+        <!-- Live Mobile Unit Card -->
+        <div class="card bus-status-card">
+          <div class="card-header">
+            <span class="card-title">MOBILE SENSING UNIT</span>
+            <span class="chip-pulse" id="busLiveChip">LIVE</span>
           </div>
 
-          <div class="bus-details-grid">
-            <div class="bus-detail-item">
-              <span class="b-label">LATITUDE</span>
-              <span class="b-val" id="busLat">12.971598</span>
+          <div class="bus-hero-info">
+            <div class="bus-badge-id" id="busIdVal">BUS-101</div>
+            <div class="bus-title" id="busNameVal">BMTC Urban Sense (Electric)</div>
+            <div class="bus-route-name">Route 335E: Majestic ➔ Whitefield</div>
+          </div>
+
+          <div class="telemetry-tele-grid">
+            <div class="tele-item">
+              <span class="tele-label">LATITUDE</span>
+              <span class="tele-val" id="teleLat">12.971598</span>
             </div>
-            <div class="bus-detail-item">
-              <span class="b-label">LONGITUDE</span>
-              <span class="b-val" id="busLon">77.594562</span>
+            <div class="tele-item">
+              <span class="tele-label">LONGITUDE</span>
+              <span class="tele-val" id="teleLon">77.594562</span>
             </div>
-            <div class="bus-detail-item">
-              <span class="b-label">SPEED</span>
-              <span class="b-val" id="busSpeed">31.2 km/h</span>
+            <div class="tele-item">
+              <span class="tele-label">SPEED</span>
+              <span class="tele-val font-accent" id="teleSpeed">28.4 km/h</span>
             </div>
-            <div class="bus-detail-item">
-              <span class="b-label">LAST SEEN</span>
-              <span class="b-val" id="busLastSeen">Just now</span>
+            <div class="tele-item">
+              <span class="tele-label">LAST SEEN</span>
+              <span class="tele-val" id="teleLastSeen">Just now</span>
             </div>
           </div>
 
           <!-- Video Mode Toggle -->
-          <div class="video-mode-selector">
-            <div class="v-mode-label">AI INGESTION SOURCE:</div>
-            <div class="v-mode-buttons">
-              <button class="v-btn active" id="btnModeDemo">DEMO ROAD VIDEO</button>
-              <button class="v-btn" id="btnModeLive">LIVE PHONE CAMERA</button>
+          <div class="mode-switch-container">
+            <div class="mode-switch-title">AI INGESTION SOURCE:</div>
+            <div class="mode-switch-buttons">
+              <button class="mode-btn active" id="btnModeDemo">DEMO ROAD VIDEO</button>
+              <button class="mode-btn" id="btnModeLive">LIVE PHONE CAMERA</button>
             </div>
           </div>
         </div>
 
-        <!-- Bandwidth Demonstration Card -->
-        <div class="panel-card bandwidth-panel">
-          <div class="panel-header">
-            <div class="panel-title">EDGE VS CLOUD BANDWIDTH</div>
-            <span class="estimate-pill">DESIGN ESTIMATE</span>
+        <!-- Live Camera Stream Box -->
+        <div class="card camera-stream-card">
+          <div class="card-header">
+            <span class="card-title">LIVE EDGE CAMERA PREVIEW</span>
+            <span class="chip-sm" id="streamFpsChip">15 FPS</span>
           </div>
+          <div class="camera-stream-wrapper">
+            <img id="liveStreamImg" src="/stream/latest-frame" alt="Live Camera Stream" />
+            <div class="stream-placeholder" id="streamPlaceholder">
+              <div class="radar-scan"></div>
+              <span>Awaiting camera feed from edge unit...</span>
+            </div>
+            <div class="stream-overlay-hud">
+              <span class="hud-tag">YOLOv8 + ByteTrack</span>
+              <span class="hud-tag" id="hudBusTag">BUS-101</span>
+            </div>
+          </div>
+        </div>
 
-          <p class="bw-desc">Edge AI filters continuous video frames locally, transmitting only structured metadata.</p>
+        <!-- Bandwidth Architecture Card -->
+        <div class="card bandwidth-card">
+          <div class="card-header">
+            <span class="card-title">EDGE VS CLOUD TRANSMISSION</span>
+            <span class="chip-micro">DESIGN ESTIMATE</span>
+          </div>
+          <p class="bw-explainer">Edge inference filters raw video frames on-vehicle, streaming only structured JSON events.</p>
           
-          <div class="bw-bars">
-            <div class="bw-bar-item">
-              <div class="bw-bar-header">
-                <span>Continuous Raw Video Stream</span>
+          <div class="bw-comparison-bars">
+            <div class="bw-row">
+              <div class="bw-row-meta">
+                <span>Continuous Video Stream</span>
                 <strong>~144.0 GB / day</strong>
               </div>
-              <div class="bw-progress-track">
-                <div class="bw-progress-fill raw" style="width: 100%;"></div>
+              <div class="bw-bar-track">
+                <div class="bw-bar-fill raw-fill" style="width: 100%;"></div>
               </div>
             </div>
 
-            <div class="bw-bar-item">
-              <div class="bw-bar-header">
-                <span>Gartika Edge Event Telemetry</span>
-                <strong style="color: #00f2fe;">~0.035 GB / day</strong>
+            <div class="bw-row">
+              <div class="bw-row-meta">
+                <span>Gartika Edge Telemetry</span>
+                <strong class="highlight-cyan">~0.035 GB / day</strong>
               </div>
-              <div class="bw-progress-track">
-                <div class="bw-progress-fill structured" style="width: 1.5%;"></div>
+              <div class="bw-bar-track">
+                <div class="bw-bar-fill edge-fill" style="width: 2%;"></div>
               </div>
             </div>
           </div>
 
-          <div class="bw-footer">
-            <span class="bw-chip">✓ 99.97% Transmission Reduction</span>
-            <span class="bw-chip">✓ Privacy Preserved</span>
-          </div>
-        </div>
-
-        <!-- Work Orders Quick List -->
-        <div class="panel-card work-orders-panel">
-          <div class="panel-header">
-            <div class="panel-title">MAINTENANCE WORK ORDERS</div>
-            <span class="count-badge" id="woCount">0</span>
-          </div>
-          <div class="wo-list" id="woListContainer">
-            <div class="empty-state">No work orders created yet. Click an event to dispatch maintenance.</div>
+          <div class="bw-chips-row">
+            <span class="bw-check-chip">✓ 99.97% Data Reduction</span>
+            <span class="bw-check-chip">✓ Privacy Preserved</span>
           </div>
         </div>
 
       </aside>
 
-      <!-- Center: GIS Map -->
-      <section class="center-map-section">
-        <div class="map-container-wrapper">
+      <!-- Center Column: Full GIS Interactive Map -->
+      <section class="center-pane">
+        <div class="map-wrapper">
           <div id="gisMap"></div>
           
-          <!-- Map Overlay HUD Controls -->
+          <!-- Floating Map HUD Legend -->
           <div class="map-hud-legend">
-            <div class="legend-title">GIS LAYER LEGEND</div>
-            <div class="legend-item"><span class="leg-marker bus"></span> Sensing Bus (BUS-101)</div>
-            <div class="legend-item"><span class="leg-marker pothole"></span> Road Defect / Pothole</div>
-            <div class="legend-item"><span class="leg-marker traffic"></span> Traffic Density Count</div>
+            <div class="hud-title">GIS LAYER LEGEND</div>
+            <div class="legend-row"><span class="legend-dot bus-dot"></span> Sensing Bus (BUS-101)</div>
+            <div class="legend-row"><span class="legend-dot pothole-dot"></span> Road Defect / Pothole</div>
+            <div class="legend-row"><span class="legend-dot traffic-dot"></span> Traffic Density Count</div>
           </div>
 
-          <div class="map-hud-actions">
-            <button class="map-btn" id="btnCenterBus" title="Recenter on Bus">📍 Follow Bus</button>
-            <button class="map-btn" id="btnFitAll" title="Fit all markers">🗺️ Fit View</button>
+          <!-- Floating Map Controls -->
+          <div class="map-hud-controls">
+            <button class="map-action-btn" id="btnCenterBus" title="Recenter on Bus">📍 Follow Bus</button>
+            <button class="map-action-btn" id="btnFitAll" title="Fit all detections">🗺️ Fit View</button>
+          </div>
+        </div>
+
+        <!-- Maintenance Work Orders Bar / Mini Table -->
+        <div class="card work-orders-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-title">ACTIVE MAINTENANCE WORK ORDERS</span>
+              <span class="count-pill" id="woCountBadge">0</span>
+            </div>
+            <div class="card-header-actions">
+              <select class="select-clean" id="woFilterSelect">
+                <option value="ALL">All Statuses</option>
+                <option value="OPEN">Open</option>
+                <option value="ASSIGNED">Assigned</option>
+                <option value="IN PROGRESS">In Progress</option>
+                <option value="RESOLVED">Resolved</option>
+              </select>
+            </div>
+          </div>
+          <div class="wo-items-container" id="woItemsContainer">
+            <div class="empty-hint">No maintenance orders dispatched yet. Click any detected road defect to create an order.</div>
           </div>
         </div>
       </section>
 
-      <!-- Right: Real-Time Event Feed -->
-      <aside class="right-sidebar">
-        <div class="panel-card events-feed-panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <span class="live-pulse"></span>
-              REAL-TIME AI EVENT FEED
+      <!-- Right Column: Real-Time Event Feed with Filters -->
+      <aside class="right-pane">
+        <div class="card event-feed-card">
+          <div class="card-header">
+            <div class="feed-title-wrap">
+              <span class="feed-live-dot"></span>
+              <span class="card-title">REAL-TIME AI DETECTIONS</span>
             </div>
-            <button class="btn-refresh" id="btnRefreshEvents" title="Refresh">↻</button>
+            <div class="feed-actions">
+              <button class="icon-btn" id="btnRefreshEvents" title="Refresh">↻</button>
+            </div>
           </div>
 
-          <div class="event-feed-stream" id="eventFeedStream">
-            <div class="empty-state">Awaiting AI detected events from mobile sensor...</div>
+          <!-- Feed Filter Tabs -->
+          <div class="feed-tabs">
+            <button class="feed-tab active" data-filter="ALL">ALL</button>
+            <button class="feed-tab" data-filter="POTHOLE">POTHOLES</button>
+            <button class="feed-tab" data-filter="VEHICLE_COUNT">TRAFFIC</button>
+            <button class="feed-tab" data-filter="HIGH">CRITICAL</button>
+          </div>
+
+          <!-- Event Stream List -->
+          <div class="event-feed-scroll" id="eventFeedScroll">
+            <div class="empty-hint">Awaiting real-time detections from vehicle sensor...</div>
           </div>
         </div>
       </aside>
 
     </main>
 
-    <!-- Modal: Event Inspection & Work Order Creation -->
-    <div class="modal-backdrop" id="eventModal">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <span class="modal-badge danger" id="modalSeverityBadge">HIGH SEVERITY</span>
-            <h2 class="modal-title" id="modalEventTitle">ROAD DEFECT DETECTED</h2>
-            <div class="modal-sub" id="modalEventId">EVT-POTH-A19C</div>
+    <!-- Modal: Evidence Inspector & Work Order Dispatch -->
+    <div class="modal-layer" id="eventModal">
+      <div class="modal-box">
+        <div class="modal-top">
+          <div class="modal-title-stack">
+            <span class="modal-tag danger" id="modalSeverityTag">HIGH SEVERITY</span>
+            <h2 class="modal-heading" id="modalEventTitle">ROAD DEFECT DETECTED</h2>
+            <div class="modal-id" id="modalEventId">EVT-0000</div>
           </div>
-          <button class="modal-close" id="modalCloseBtn">&times;</button>
+          <button class="btn-close" id="modalCloseBtn">&times;</button>
         </div>
 
-        <div class="modal-body">
-          <!-- Evidence Image & Detection Preview -->
-          <div class="modal-evidence-box">
-            <div class="evidence-header">
-              <span>VISUAL EVIDENCE (LOCAL EDGE CAPTURE)</span>
-              <span class="privacy-badge">🔒 Faces / Plates Anonymized</span>
+        <div class="modal-content">
+          <!-- Visual Evidence Frame -->
+          <div class="evidence-panel">
+            <div class="evidence-top">
+              <span>LOCAL EDGE EVIDENCE CAPTURE</span>
+              <span class="privacy-note">🔒 Privacy Preserved (Anonymized)</span>
             </div>
-            <div class="img-wrapper">
-              <img id="modalEvidenceImg" src="" alt="Detection Evidence" />
-              <div class="img-fallback" id="modalImgFallback">
-                <div class="crosshair-box"></div>
+            <div class="evidence-img-container">
+              <img id="modalEvidenceImg" src="" alt="Detection Visual Evidence" />
+              <div class="evidence-fallback" id="modalEvidenceFallback">
+                <div class="crosshair-marker"></div>
                 <span>Annotated bounding-box evidence frame</span>
               </div>
             </div>
           </div>
 
-          <!-- Event Metadata -->
-          <div class="modal-meta-grid">
-            <div class="meta-item">
-              <span class="m-label">EVENT TYPE</span>
-              <span class="m-val" id="modalEventType">POTHOLE</span>
+          <!-- Detection Metadata Grid -->
+          <div class="meta-properties-grid">
+            <div class="meta-row">
+              <span class="meta-key">EVENT TYPE</span>
+              <span class="meta-val" id="modalEventType">POTHOLE</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">AI CONFIDENCE</span>
-              <span class="m-val highlight" id="modalConfidence">91.4%</span>
+            <div class="meta-row">
+              <span class="meta-key">AI CONFIDENCE</span>
+              <span class="meta-val highlight" id="modalConfidence">92.4%</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">SOURCE VEHICLE</span>
-              <span class="m-val" id="modalBusId">BUS-101</span>
+            <div class="meta-row">
+              <span class="meta-key">SOURCE VEHICLE</span>
+              <span class="meta-val" id="modalBusId">BUS-101</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">GPS LOCATION</span>
-              <span class="m-val" id="modalLocation">12.971598, 77.594562</span>
+            <div class="meta-row">
+              <span class="meta-key">GPS COORDINATES</span>
+              <span class="meta-val" id="modalLocation">12.971598, 77.594562</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">DETECTED TIME</span>
-              <span class="m-val" id="modalTimestamp">10:32:21 AM</span>
+            <div class="meta-row">
+              <span class="meta-key">TIMESTAMP</span>
+              <span class="meta-val" id="modalTimestamp">Just now</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">IMU SENSOR FUSION</span>
-              <span class="m-val" id="modalVibration">HIGH VIBRATION BOOST</span>
+            <div class="meta-row">
+              <span class="meta-key">IMU SENSOR FUSION</span>
+              <span class="meta-val" id="modalVibration">HIGH Z-AXIS SHOCK</span>
             </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary" id="modalDismissBtn">Close</button>
-          <button class="btn btn-primary" id="btnCreateWorkOrder">
-            <span>📋 CREATE WORK ORDER</span>
+        <div class="modal-bottom">
+          <button class="btn-clean" id="modalDismissBtn">Close</button>
+          <button class="btn-clean primary" id="btnCreateWorkOrder">
+            <span>📋 DISPATCH WORK ORDER</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Modal: Connect Phone QR / URL -->
-    <div class="modal-backdrop" id="phoneModal">
-      <div class="modal-card modal-sm">
-        <div class="modal-header">
-          <h2 class="modal-title">CONNECT SMARTPHONE SENSOR</h2>
-          <button class="modal-close" id="phoneModalClose">&times;</button>
+    <!-- Modal: Phone Edge Connection Info -->
+    <div class="modal-layer" id="phoneModal">
+      <div class="modal-box modal-compact">
+        <div class="modal-top">
+          <h2 class="modal-heading">CONNECT SMARTPHONE SENSOR</h2>
+          <button class="btn-close" id="phoneModalClose">&times;</button>
         </div>
-        <div class="modal-body text-center">
-          <p class="phone-inst">Connect your smartphone to the same Wi-Fi or laptop hotspot, then open this URL in your mobile browser:</p>
-          <div class="mobile-url-box">
+        <div class="modal-content text-center">
+          <p class="phone-instruct">Connect your mobile phone to the same Wi-Fi network or hotspot, and open this URL in your mobile browser:</p>
+          <div class="url-badge-box">
             <code id="mobileConnectUrl">http://192.168.1.10:8000/mobile</code>
           </div>
-          <p class="phone-sub">The mobile web app provides live camera, GPS tracking, and accelerometer sensor fusion.</p>
+          <p class="phone-foot">The mobile web app streams real-time GPS, accelerometer telemetry, and camera frames to Gartika.</p>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" id="phoneModalOk">Got it</button>
+        <div class="modal-bottom">
+          <button class="btn-clean primary" id="phoneModalOk">Got it</button>
         </div>
       </div>
     </div>
 
   </div>
 
-  <!-- Leaflet JS -->
+  <!-- Leaflet GIS JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <!-- App JS -->
+  <!-- Application Script -->
   <script src="app.js"></script>
 </body>
 </html>
+

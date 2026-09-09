@@ -1,0 +1,66 @@
+[0;1;31m×[0m pipewire.service - PipeWire Multimedia Service
+     Loaded: loaded (]8;;file://fedora/usr/lib/systemd/user/pipewire.service\/usr/lib/systemd/user/pipewire.service]8;;\; [0;1;38:5:185mdisabled[0m; preset: [0;1;38:5:185mdisabled[0m)
+    Drop-In: /usr/lib/systemd/user/pipewire.service.d
+             └─]8;;file://fedora/usr/lib/systemd/user/pipewire.service.d/00-uresourced.conf\00-uresourced.conf]8;;\
+             /usr/lib/systemd/user/service.d
+             └─]8;;file://fedora/usr/lib/systemd/user/service.d/10-timeout-abort.conf\10-timeout-abort.conf]8;;\
+     Active: [0;1;31mfailed[0m (Result: exit-code) since Wed 2026-09-09 05:14:15 IST; 4min 12s ago
+   Duration: 18ms
+ Invocation: 336bd3d699b94560a71b32ffbfdbb8c7
+TriggeredBy: [0;1;31m×[0m pipewire.socket
+    Process: 1701 ExecStart=/usr/bin/pipewire [0;1;31m(code=exited, status=234)[0m
+   Main PID: 1701 (code=exited, status=234)
+   Mem peak: 2.4M
+        CPU: 14ms
+
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire.service - PipeWire Multimedia Service.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire.service: Job pipewire.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire.service - PipeWire Multimedia Service.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire.service: Job pipewire.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire.service - PipeWire Multimedia Service.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire.service: Job pipewire.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire.service - PipeWire Multimedia Service.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire.service: Job pipewire.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire.service - PipeWire Multimedia Service.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire.service: Job pipewire.service/start failed with result 'dependency'.[0m
+
+○ pipewire-pulse.service - PipeWire PulseAudio
+     Loaded: loaded (]8;;file://fedora/usr/lib/systemd/user/pipewire-pulse.service\/usr/lib/systemd/user/pipewire-pulse.service]8;;\; [0;1;38:5:185mdisabled[0m; preset: [0;1;38:5:185mdisabled[0m)
+    Drop-In: /usr/lib/systemd/user/service.d
+             └─]8;;file://fedora/usr/lib/systemd/user/service.d/10-timeout-abort.conf\10-timeout-abort.conf]8;;\
+     Active: inactive (dead)
+TriggeredBy: [0;1;31m×[0m pipewire-pulse.socket
+
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire-pulse.service - PipeWire PulseAudio.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire-pulse.service: Job pipewire-pulse.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire-pulse.service - PipeWire PulseAudio.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire-pulse.service: Job pipewire-pulse.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire-pulse.service - PipeWire PulseAudio.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire-pulse.service: Job pipewire-pulse.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire-pulse.service - PipeWire PulseAudio.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire-pulse.service: Job pipewire-pulse.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for pipewire-pulse.service - PipeWire PulseAudio.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mpipewire-pulse.service: Job pipewire-pulse.service/start failed with result 'dependency'.[0m
+
+○ wireplumber.service - Multimedia Service Session Manager
+     Loaded: loaded (]8;;file://fedora/usr/lib/systemd/user/wireplumber.service\/usr/lib/systemd/user/wireplumber.service]8;;\; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+    Drop-In: /usr/lib/systemd/user/service.d
+             └─]8;;file://fedora/usr/lib/systemd/user/service.d/10-timeout-abort.conf\10-timeout-abort.conf]8;;\
+     Active: inactive (dead) since Wed 2026-09-09 05:14:14 IST; 4min 12s ago
+   Duration: 18ms
+ Invocation: 0be407ead9a84da1be63ac2029113111
+    Process: 1702 ExecStart=/usr/bin/wireplumber (code=exited, status=0/SUCCESS)
+   Main PID: 1702 (code=exited, status=0/SUCCESS)
+   Mem peak: 2.1M
+        CPU: 15ms
+
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for wireplumber.service - Multimedia Service Session Manager.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mwireplumber.service: Job wireplumber.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for wireplumber.service - Multimedia Service Session Manager.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mwireplumber.service: Job wireplumber.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for wireplumber.service - Multimedia Service Session Manager.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mwireplumber.service: Job wireplumber.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for wireplumber.service - Multimedia Service Session Manager.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mwireplumber.service: Job wireplumber.service/start failed with result 'dependency'.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mDependency failed for wireplumber.service - Multimedia Service Session Manager.[0m
+Sep 09 05:14:15 fedora systemd[1451]: [0;1;39m[0;1;31m[0;1;39mwireplumber.service: Job wireplumber.service/start failed with result 'dependency'.[0m

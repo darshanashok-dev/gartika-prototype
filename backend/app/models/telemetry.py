@@ -2,6 +2,9 @@ from sqlalchemy import Column, Integer, String, Float, DateTime
 from datetime import datetime, timezone
 from backend.app.database import Base
 
+def utc_now():
+    return datetime.now(timezone.utc)
+
 class Telemetry(Base):
     __tablename__ = "telemetry"
 
@@ -17,4 +20,5 @@ class Telemetry(Base):
     gx = Column(Float, default=0.0)
     gy = Column(Float, default=0.0)
     gz = Column(Float, default=0.0)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utc_now, index=True)
+

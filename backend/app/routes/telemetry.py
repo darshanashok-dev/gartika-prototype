@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -14,49 +14,56 @@ from backend.app.websocket import manager
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 logger = logging.getLogger("gartika.telemetry")
 
-@router.post("", response_model=TelemetryResponse, status_code=201)
+@router.post("", response_model=TelemetryResponse, status_code=status.HTTP_201_CREATED)
 async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db)):
-    """Ingest GPS and IMU telemetry from smartphone edge unit."""
+    """Ingest GPS and IMU telemetry from smartphone edge unit with transactional safety."""
     ts = t_in.timestamp or datetime.now(timezone.utc)
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
     
-    db_t = Telemetry(
-        bus_id=t_in.bus_id,
-        latitude=t_in.latitude,
-        longitude=t_in.longitude,
-        accuracy=t_in.accuracy,
-        speed=t_in.speed,
-        ax=t_in.ax,
-        ay=t_in.ay,
-        az=t_in.az,
-        gx=t_in.gx,
-        gy=t_in.gy,
-        gz=t_in.gz,
-        timestamp=ts
-    )
-    db.add(db_t)
-    
-    # Update bus status and position
-    bus = db.query(Bus).filter(Bus.bus_id == t_in.bus_id).first()
-    if bus:
-        bus.latitude = t_in.latitude
-        bus.longitude = t_in.longitude
-        bus.speed = t_in.speed
-        bus.last_seen = ts
-        bus.status = "ONLINE"
-    else:
-        bus = Bus(
+    try:
+        db_t = Telemetry(
             bus_id=t_in.bus_id,
-            name=f"Bus Sensing Unit {t_in.bus_id}",
             latitude=t_in.latitude,
             longitude=t_in.longitude,
+            accuracy=t_in.accuracy,
             speed=t_in.speed,
-            last_seen=ts,
-            status="ONLINE"
+            ax=t_in.ax,
+            ay=t_in.ay,
+            az=t_in.az,
+            gx=t_in.gx,
+            gy=t_in.gy,
+            gz=t_in.gz,
+            timestamp=ts
         )
-        db.add(bus)
+        db.add(db_t)
         
-    db.commit()
-    db.refresh(db_t)
+        # Update bus status and position
+        bus = db.query(Bus).filter(Bus.bus_id == t_in.bus_id).first()
+        if bus:
+            bus.latitude = t_in.latitude
+            bus.longitude = t_in.longitude
+            bus.speed = t_in.speed
+            bus.last_seen = ts
+            bus.status = "ONLINE"
+        else:
+            bus = Bus(
+                bus_id=t_in.bus_id,
+                name=f"Bus Sensing Unit {t_in.bus_id}",
+                latitude=t_in.latitude,
+                longitude=t_in.longitude,
+                speed=t_in.speed,
+                last_seen=ts,
+                status="ONLINE"
+            )
+            db.add(bus)
+            
+        db.commit()
+        db.refresh(db_t)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[TELEMETRY] Error ingesting telemetry: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to ingest telemetry: {str(e)}")
     
     # Broadcast telemetry update to dashboard
     await manager.broadcast({
@@ -77,7 +84,13 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
     return db_t
 
 @router.get("/buses/{bus_id}/telemetry", response_model=List[TelemetryResponse])
-def get_bus_telemetry(bus_id: str, limit: int = Query(30, ge=1, le=200), db: Session = Depends(get_db)):
-    """Get recent telemetry for a given bus."""
-    records = db.query(Telemetry).filter(Telemetry.bus_id == bus_id).order_by(desc(Telemetry.timestamp)).limit(limit).all()
+def get_bus_telemetry(
+    bus_id: str,
+    limit: int = Query(30, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    """Get recent telemetry for a given bus with pagination."""
+    records = db.query(Telemetry).filter(Telemetry.bus_id == bus_id).order_by(desc(Telemetry.timestamp)).offset(offset).limit(limit).all()
     return records
+

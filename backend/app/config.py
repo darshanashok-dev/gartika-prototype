@@ -35,12 +35,16 @@ class Settings:
     EVIDENCE_DIR: Path = BASE_DIR / os.getenv("EVIDENCE_DIR", "data/evidence")
     VIDEOS_DIR: Path = BASE_DIR / os.getenv("VIDEOS_DIR", "data/videos")
     DEMO_DIR: Path = BASE_DIR / "data/demo"
+
     MOBILE_DIR: Path = BASE_DIR / "mobile"
-    DASHBOARD_DIST: Path = BASE_DIR / "dashboard/dist"
+    DASHBOARD_DIR: Path = BASE_DIR / "dashboard"
+    DASHBOARD_DIST: Path = BASE_DIR / "dashboard"
     
     LOCAL_IP: str = get_local_ip()
 
 settings = Settings()
+
+
 settings.EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 settings.VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 settings.DEMO_DIR.mkdir(parents=True, exist_ok=True)

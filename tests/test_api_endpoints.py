@@ -98,9 +98,14 @@ class TestApiEndpoints(unittest.TestCase):
 
     def test_04_websocket_connection(self):
         with self.client.websocket_connect("/ws/events") as websocket:
+            # First message received is the connection establishment message
+            init_data = websocket.receive_json()
+            self.assertEqual(init_data.get("type"), "CONNECTION_ESTABLISHED")
+            
             websocket.send_text("ping")
             data = websocket.receive_text()
             self.assertEqual(data, "pong")
 
 if __name__ == "__main__":
+
     unittest.main()
