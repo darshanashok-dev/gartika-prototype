@@ -1,3 +1,12 @@
+"""
+Event Generator Module for Gartika Urban Intelligence.
+
+This module converts raw Computer Vision detections and sensor readings into
+structured, geo-tagged urban events (e.g. pothole alerts, traffic density events).
+It handles spatiotemporal deduplication, privacy-preserving face blurring, and
+annotated evidence image generation.
+"""
+
 import math
 import uuid
 import time
@@ -12,7 +21,18 @@ from backend.app.config import settings
 logger = logging.getLogger("gartika.ai.event_generator")
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance in meters between two GPS coordinates."""
+    """
+    Calculate the great-circle distance in meters between two GPS coordinates using the Haversine formula.
+    
+    Args:
+        lat1: Latitude of point 1 in decimal degrees.
+        lon1: Longitude of point 1 in decimal degrees.
+        lat2: Latitude of point 2 in decimal degrees.
+        lon2: Longitude of point 2 in decimal degrees.
+        
+    Returns:
+        float: Distance between the two points in meters.
+    """
     R = 6371000.0  # Earth radius in meters
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -26,7 +46,23 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * c
 
 class EventGenerator:
+    """
+    Generates structured, privacy-compliant, deduplicated events from AI detections.
+    
+    Attributes:
+        cooldown_seconds (float): Minimum time delay before a duplicate alert can fire at same spot.
+        distance_threshold_meters (float): Distance radius within which events are considered identical.
+        recent_events (list): In-memory buffer tracking recently created events for deduplication.
+        evidence_dir (Path): Local filesystem directory where annotated evidence frames are stored.
+    """
     def __init__(self, cooldown_seconds: float = 5.0, distance_threshold_meters: float = 20.0):
+        """
+        Initialize the EventGenerator.
+        
+        Args:
+            cooldown_seconds: Cooldown window in seconds to prevent spamming duplicate events.
+            distance_threshold_meters: Spatial threshold in meters for deduplication.
+        """
         self.cooldown_seconds = cooldown_seconds
         self.distance_threshold_meters = distance_threshold_meters
         self.recent_events: List[Dict] = []
@@ -34,8 +70,19 @@ class EventGenerator:
         self.evidence_dir.mkdir(parents=True, exist_ok=True)
 
     def is_duplicate(self, event_type: str, lat: float, lon: float, current_time: float) -> bool:
-        """Check if an identical event occurred within cooldown time and distance threshold."""
-        # Clean up stale items from history
+        """
+        Check if an identical event occurred within the cooldown time and distance threshold.
+        
+        Args:
+            event_type: Type of event (e.g. 'POTHOLE', 'VEHICLE_COUNT').
+            lat: Current GPS latitude.
+            lon: Current GPS longitude.
+            current_time: Timestamp in seconds.
+            
+        Returns:
+            bool: True if duplicate event should be suppressed, False otherwise.
+        """
+        # Clean up stale items older than 30 seconds from recent events history
         self.recent_events = [e for e in self.recent_events if current_time - e['time'] < 30.0]
         
         for e in self.recent_events:
@@ -49,13 +96,22 @@ class EventGenerator:
         return False
 
     def anonymize_frame(self, frame: np.ndarray, detections: Optional[List[Dict]] = None) -> np.ndarray:
-        """Apply privacy blurring on people and license plates."""
+        """
+        Apply privacy-preserving Gaussian blur over pedestrians to protect personal privacy.
+        
+        Args:
+            frame: Camera image frame.
+            detections: List of detected objects with class labels and bounding boxes.
+            
+        Returns:
+            np.ndarray: Anonymized frame copy.
+        """
         anon_frame = frame.copy()
         if detections:
             for det in detections:
                 if det.get("class_name") in ["person"]:
                     x1, y1, x2, y2 = det["bbox"]
-                    # Blur head/person area
+                    # Blur upper portion (head/face area) of pedestrian
                     head_h = int((y2 - y1) * 0.35)
                     head_roi = anon_frame[y1:y1 + head_h, x1:x2]
                     if head_roi.size > 0:
@@ -64,10 +120,25 @@ class EventGenerator:
         return anon_frame
 
     def save_evidence(self, frame: np.ndarray, bbox: Optional[List[int]], event_id: str, label: str, detections: Optional[List[Dict]] = None) -> str:
-        """Save annotated, privacy-preserved evidence image to disk."""
+        """
+        Annotate, watermark, and save evidence image to disk.
+        
+        Draws bounding boxes, defect labels, timestamp watermarks, and applies privacy
+        blurring before saving JPEG evidence to the media folder.
+        
+        Args:
+            frame: Raw camera frame.
+            bbox: Bounding box [x1, y1, x2, y2] of defect to highlight.
+            event_id: Unique event identifier string.
+            label: Text label and confidence string to overlay.
+            detections: Optional list of all detections for anonymization.
+            
+        Returns:
+            str: Relative URL path (e.g. '/evidence/filename.jpg') for accessing the evidence.
+        """
         anon_frame = self.anonymize_frame(frame, detections)
         
-        # Draw bounding box and label on evidence
+        # Draw bounding box and label banner on evidence
         if bbox:
             x1, y1, x2, y2 = bbox
             cv2.rectangle(anon_frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
@@ -95,7 +166,20 @@ class EventGenerator:
         lon: float,
         detections: Optional[List[Dict]] = None
     ) -> Optional[Dict]:
-        """Generate structured pothole event if not duplicate."""
+        """
+        Generate a structured road defect event payload if not suppressed by deduplication.
+        
+        Args:
+            defect: Defect dictionary with 'event_type', 'confidence', 'severity', 'bbox'.
+            frame: Camera frame at the moment of detection.
+            bus_id: Identifier of the reporting bus.
+            lat: Current GPS latitude.
+            lon: Current GPS longitude.
+            detections: Optional list of other objects detected in frame.
+            
+        Returns:
+            dict or None: Event dictionary ready for database insertion/API dispatch, or None if duplicate.
+        """
         now = time.time()
         if self.is_duplicate(defect['event_type'], lat, lon, now):
             return None
@@ -119,6 +203,7 @@ class EventGenerator:
             "location_name": f"Urban Road Section ({lat:.4f}, {lon:.4f})"
         }
 
+        # Record in recent events for deduplication
         self.recent_events.append({
             "event_type": defect['event_type'],
             "lat": lat,
@@ -136,7 +221,18 @@ class EventGenerator:
         lat: float,
         lon: float
     ) -> Optional[Dict]:
-        """Generate periodic vehicle density / traffic count event."""
+        """
+        Generate a periodic traffic density / vehicle count event.
+        
+        Args:
+            tracked_vehicles: List of currently tracked vehicles in the scene.
+            bus_id: Identifier of the reporting bus.
+            lat: Current GPS latitude.
+            lon: Current GPS longitude.
+            
+        Returns:
+            dict or None: Traffic count event payload, or None if duplicate/empty.
+        """
         now = time.time()
         if self.is_duplicate("VEHICLE_COUNT", lat, lon, now):
             return None
@@ -147,7 +243,7 @@ class EventGenerator:
 
         event_id = f"EVT-TRF-{uuid.uuid4().hex[:5].upper()}"
         
-        # Determine dominant vehicle class
+        # Determine dominant vehicle classification in the visual field
         classes = [v['class_name'] for v in tracked_vehicles]
         dom_class = max(set(classes), key=classes.count) if classes else "CAR"
         

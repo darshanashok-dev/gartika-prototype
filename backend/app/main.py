@@ -1,3 +1,11 @@
+"""
+Main FastAPI Application Entrypoint for Gartika Urban Intelligence.
+
+Sets up application lifecycle (startup banner, DB migration), registers REST API routes,
+configures CORS middleware, mounts static assets (evidence, mobile app, dashboard),
+and establishes the real-time WebSocket event streaming gateway.
+"""
+
 import sys
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -26,6 +34,12 @@ logger = logging.getLogger("gartika.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    FastAPI lifespan context manager.
+    
+    Executes database schema migrations on startup, logs system connection endpoints,
+    and handles graceful teardown on shutdown.
+    """
     # Initialize database tables
     Base.metadata.create_all(bind=engine)
     logger.info("[DB] Database initialized successfully.")
@@ -50,6 +64,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("[MAIN] Shutting down Gartika platform.")
 
+# Initialize FastAPI App instance
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -57,7 +72,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware for mobile and frontend access
+# CORS middleware for mobile devices and external frontend clients
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -74,7 +89,7 @@ app.include_router(work_orders.router)
 app.include_router(telemetry.router)
 app.include_router(stream.router)
 
-# Mount evidence folder
+# Mount evidence folder for serving saved defect images
 app.mount("/evidence", StaticFiles(directory=str(settings.EVIDENCE_DIR)), name="evidence")
 
 # Mount mobile web interface
@@ -83,6 +98,10 @@ app.mount("/mobile", StaticFiles(directory=str(settings.MOBILE_DIR), html=True),
 # Real-time WebSocket endpoint
 @app.websocket("/ws/events")
 async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for bidirectional real-time communication with dashboards.
+    Accepts connections, listens for ping-pongs, and handles graceful disconnection.
+    """
     await manager.connect(websocket)
     try:
         while True:
@@ -96,24 +115,28 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.warning(f"[WS] Exception in client websocket: {e}")
         manager.disconnect(websocket)
 
-# Check if dashboard dist exists, else fallback to dynamic page
+# Check if dashboard dist exists, else fallback to dynamic docs
 if settings.DASHBOARD_DIST.exists():
     @app.api_route("/styles.css", methods=["GET", "HEAD"], include_in_schema=False)
     def get_root_styles():
+        """Serve root stylesheet for the web dashboard."""
         return FileResponse(settings.DASHBOARD_DIST / "styles.css", media_type="text/css")
 
     @app.api_route("/app.js", methods=["GET", "HEAD"], include_in_schema=False)
     def get_root_app_js():
+        """Serve root client JavaScript application for the web dashboard."""
         return FileResponse(settings.DASHBOARD_DIST / "app.js", media_type="application/javascript")
 
     app.mount("/dashboard", StaticFiles(directory=str(settings.DASHBOARD_DIST), html=True), name="dashboard")
     
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root():
+        """Serve root landing page (command center dashboard)."""
         return FileResponse(settings.DASHBOARD_DIST / "index.html")
 else:
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root():
+        """Fallback to Swagger API documentation if dashboard is not built."""
         return RedirectResponse(url="/docs")
 
 if __name__ == "__main__":

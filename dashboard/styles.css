@@ -453,6 +453,10 @@ html, body {
   height: 100%;
 }
 
+#gisMap .leaflet-tile {
+  filter: brightness(0.65) invert(1) contrast(2.8) hue-rotate(200deg) saturate(0.25) brightness(0.75);
+}
+
 .map-legend {
   position: absolute;
   top: 12px;

@@ -1,0 +1,17 @@
+# Gartika Urban Intelligence - Custom Road Defect Dataset Configuration
+# Standard YOLO format configuration for road surface hazard identification
+
+path: /home/da/sih/prototype/dataset
+train: images/train
+val: images/val
+test: images/test
+
+# Number of classes
+nc: 4
+
+# Class names mapping (Primary: 0: pothole)
+names:
+  0: pothole
+  1: road_crack
+  2: waterlogging
+  3: damaged_road

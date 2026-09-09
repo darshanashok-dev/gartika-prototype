@@ -1,0 +1,42 @@
+{
+  "total_images": 150,
+  "total_sequences": 15,
+  "splits": {
+    "train": 100,
+    "val": 30,
+    "test": 20
+  },
+  "sequence_distribution": {
+    "train": [
+      "seq14",
+      "seq09",
+      "seq03",
+      "seq04",
+      "seq15",
+      "seq08",
+      "seq06",
+      "seq10",
+      "seq13",
+      "seq07"
+    ],
+    "val": [
+      "seq01",
+      "seq05",
+      "seq12"
+    ],
+    "test": [
+      "seq02",
+      "seq11"
+    ]
+  },
+  "total_annotations": 160,
+  "annotations_per_class": {
+    "pothole": 130,
+    "road_crack": 30,
+    "waterlogging": 0,
+    "damaged_road": 0
+  },
+  "images_zero_annotations": 30,
+  "corrupted_images": [],
+  "missing_label_files_created": 0
+}

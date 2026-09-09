@@ -1,3 +1,11 @@
+"""
+Telemetry Ingestion & Sensor Shock Detection Routes for Gartika Urban Intelligence.
+
+Ingests high-frequency GPS and IMU accelerometer data from mobile units,
+detects road bump shocks in real-time, pairs with recent camera frames, and broadcasts
+live telemetry coordinates to the GIS Command Center.
+"""
+
 import logging
 import uuid
 import time
@@ -21,8 +29,18 @@ logger = logging.getLogger("gartika.telemetry")
 @router.post("", response_model=TelemetryResponse, status_code=status.HTTP_201_CREATED)
 async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db)):
     """
-    Ingest live GPS and IMU telemetry from smartphone edge unit,
-    detect accelerometer bump shocks in real-time, and broadcast to command center.
+    Ingest live GPS and IMU telemetry from a smartphone edge unit.
+    
+    Processes accelerometer vertical axis (az) to detect severe road bump impacts.
+    If a vertical spike exceeding threshold is detected, it automatically creates a
+    Pothole event paired with the latest camera frame and triggers real-time alerts.
+    
+    Args:
+        t_in: Validated TelemetryCreate payload.
+        db: Scoped database session.
+        
+    Returns:
+        Telemetry: Stored telemetry record.
     """
     ts = t_in.timestamp or datetime.now(timezone.utc)
     if ts.tzinfo is None:
@@ -71,7 +89,7 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
             evt_code = uuid.uuid4().hex[:5].upper()
             evt_id = f"EVT-POTH-{evt_code}"
             
-            # Check if there is a recent frame in stream module
+            # Check if there is a recent frame in stream module to save as evidence
             from backend.app.routes.stream import latest_frame_bytes
             evidence_path = None
             if latest_frame_bytes:
@@ -149,13 +167,33 @@ def get_bus_telemetry(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db)
 ):
-    """Get recent telemetry for a given bus with pagination."""
+    """
+    Retrieve historical telemetry breadcrumbs for a specific bus.
+    
+    Args:
+        bus_id: Unique bus identifier.
+        limit: Max records.
+        offset: Skip records.
+        db: Scoped database session.
+        
+    Returns:
+        list of Telemetry: Historical telemetry entries ordered newest first.
+    """
     records = db.query(Telemetry).filter(Telemetry.bus_id == bus_id).order_by(desc(Telemetry.timestamp)).offset(offset).limit(limit).all()
     return records
 
 @router.get("/latest", response_model=TelemetryResponse)
 def get_latest_telemetry(bus_id: str = Query("BUS-101"), db: Session = Depends(get_db)):
-    """Get the latest telemetry record for a bus."""
+    """
+    Retrieve the most recent telemetry observation recorded for a given bus.
+    
+    Args:
+        bus_id: Bus identifier (default: 'BUS-101').
+        db: Scoped database session.
+        
+    Returns:
+        Telemetry: Most recent telemetry data point.
+    """
     record = db.query(Telemetry).filter(Telemetry.bus_id == bus_id).order_by(desc(Telemetry.timestamp)).first()
     if not record:
         record = db.query(Telemetry).order_by(desc(Telemetry.timestamp)).first()

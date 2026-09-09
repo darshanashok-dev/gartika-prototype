@@ -1,3 +1,11 @@
+"""
+Standalone USB Dashcam & Webcam Edge Sensing Script for Gartika Urban Intelligence.
+
+Captures real-time camera frames directly from a laptop webcam or plugged-in USB camera,
+runs local Edge Computer Vision detection for potholes and vehicles, overlays HUD diagnostics,
+and streams live JPEG snapshots and GPS/IMU telemetry to the central backend.
+"""
+
 import sys
 import time
 import argparse
@@ -33,9 +41,20 @@ def run_webcam_edge(
     show_window: bool = True
 ):
     """
-    Real-time Edge Sensing Client using Laptop Webcam or USB Dashcam.
-    Captures live camera frames, runs Edge AI CV inference, and streams
-    live telemetry & defect frames to the Gartika Command Center.
+    Run the real-time Edge Sensing Client on a hardware webcam or video file.
+    
+    1. Opens camera device capture stream (e.g. 640x480 @ 30fps).
+    2. Instantiates local PotholeDetector and VehicleDetector instances.
+    3. Runs AI defect and vehicle inference per frame.
+    4. Overlays HUD text and bounding boxes on display window.
+    5. Streams live frame JPEGs to /stream/frame and periodic GPS/IMU telemetry to /telemetry.
+    
+    Args:
+        camera_index: Hardware device ID (default: 0).
+        video_source: Optional path to video file if not using physical camera.
+        backend_url: Base URL of Gartika backend API.
+        bus_id: Vehicle identifier string.
+        show_window: Whether to show local OpenCV GUI preview window.
     """
     logger.info("=" * 55)
     logger.info("   GARTIKA REAL-TIME EDGE SENSING CLIENT")

@@ -1,3 +1,11 @@
+"""
+Demo Database Seeding Script for Gartika Urban Intelligence.
+
+Generates realistic mock data (synthetic evidence frames, active electric bus unit,
+geotagged potholes, road defects, vehicle traffic counts, maintenance work orders,
+and high-frequency IMU telemetry breadcrumbs) for comprehensive end-to-end demonstrations.
+"""
+
 import sys
 import os
 import time
@@ -18,7 +26,16 @@ from backend.app.models.telemetry import Telemetry
 from backend.app.config import settings
 
 def create_sample_evidence_image(filename: str, label: str):
-    """Generate sample annotated evidence frame with privacy blur."""
+    """
+    Generate a sample annotated evidence frame with privacy blur and detection overlays.
+    
+    Args:
+        filename: Destination filename in data/evidence directory.
+        label: Detection banner text (e.g. 'POTHOLE (91%)').
+        
+    Returns:
+        str: Relative URL path (e.g. '/evidence/filename.jpg').
+    """
     settings.EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
     img_path = settings.EVIDENCE_DIR / filename
     if img_path.exists():
@@ -27,7 +44,7 @@ def create_sample_evidence_image(filename: str, label: str):
     h, w = 480, 720
     img = np.zeros((h, w, 3), dtype=np.uint8)
     
-    # Asphalt road
+    # Asphalt road canvas
     img[0:int(h*0.4), :] = (180, 160, 130) # city background
     img[int(h*0.4):, :] = (65, 65, 70) # road asphalt
     
@@ -54,6 +71,10 @@ def create_sample_evidence_image(filename: str, label: str):
     return f"/evidence/{filename}"
 
 def seed():
+    """
+    Initialize database tables, clear existing demo records, and seed fresh
+    realistic bus units, defect events, work orders, and sensor telemetry.
+    """
     print("[SEED] Initializing database tables...")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -191,4 +212,7 @@ def seed():
     print("\n✓ SUCCESS: Demo database seeded with realistic bus, events, work orders, and telemetry!")
 
 if __name__ == "__main__":
+    if "--force-demo" not in sys.argv:
+        print("[NOTICE] Demo seeding skipped: System is in strict LIVE mode. Pass --force-demo if you explicitly need mock data.")
+        sys.exit(0)
     seed()

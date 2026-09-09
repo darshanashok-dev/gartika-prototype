@@ -1,3 +1,11 @@
+"""
+Maintenance Work Orders API Routes for Gartika Urban Intelligence.
+
+Manages the end-to-end municipal dispatch workflow: converting AI defect events
+into actionable repair work orders, updating assignment/status, and keeping
+dashboards in sync via real-time WebSocket notifications.
+"""
+
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -17,7 +25,20 @@ logger = logging.getLogger("gartika.work_orders")
 
 @router.post("", response_model=WorkOrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_work_order(wo_in: WorkOrderCreate, db: Session = Depends(get_db)):
-    """Create a maintenance work order from an AI detection event with transactional safety."""
+    """
+    Create and dispatch a new municipal maintenance work order from a detected defect event.
+    
+    Copies geographic coordinates and location from the source Event, marks the Event status
+    as 'WORK_ORDER_CREATED', saves the order transactionally, and broadcasts NEW_WORK_ORDER
+    and UPDATE_EVENT over WebSockets.
+    
+    Args:
+        wo_in: Validated WorkOrderCreate request payload.
+        db: Scoped database session.
+        
+    Returns:
+        WorkOrder: Persisted work order record.
+    """
     wo_id = wo_in.work_order_id or f"WO-{uuid.uuid4().hex[:5].upper()}"
     
     # Check if event exists to copy coordinates and update event status
@@ -99,6 +120,19 @@ def get_work_orders(
     priority: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
+    """
+    Retrieve a paginated list of maintenance work orders with optional filtering.
+    
+    Args:
+        limit: Number of orders to retrieve.
+        offset: Number of orders to skip.
+        status_filter: Optional status filter ('OPEN', 'ASSIGNED', 'IN PROGRESS', 'RESOLVED').
+        priority: Optional priority filter ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL').
+        db: Scoped database session.
+        
+    Returns:
+        list of WorkOrder: Filtered work orders sorted by creation time descending.
+    """
     query = db.query(WorkOrder)
     if status_filter:
         query = query.filter(WorkOrder.status == status_filter.upper())
@@ -108,6 +142,16 @@ def get_work_orders(
 
 @router.get("/{work_order_id}", response_model=WorkOrderResponse)
 def get_work_order(work_order_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieve a specific work order by its unique work_order_id.
+    
+    Args:
+        work_order_id: Unique order ID (e.g. 'WO-101').
+        db: Scoped database session.
+        
+    Returns:
+        WorkOrder: Found work order record.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.work_order_id == work_order_id).first()
     if not wo:
         raise HTTPException(status_code=404, detail=f"Work Order {work_order_id} not found")
@@ -115,6 +159,20 @@ def get_work_order(work_order_id: str, db: Session = Depends(get_db)):
 
 @router.patch("/{work_order_id}", response_model=WorkOrderResponse)
 async def update_work_order(work_order_id: str, wo_up: WorkOrderUpdate, db: Session = Depends(get_db)):
+    """
+    Update work order status, priority, or contractor assignment.
+    
+    Automatically synchronizes the associated defect Event status (e.g. marking
+    the event RESOLVED when the repair order is completed).
+    
+    Args:
+        work_order_id: Unique order ID.
+        wo_up: Fields to update.
+        db: Scoped database session.
+        
+    Returns:
+        WorkOrder: Updated work order record.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.work_order_id == work_order_id).first()
     if not wo:
         raise HTTPException(status_code=404, detail=f"Work Order {work_order_id} not found")
@@ -160,7 +218,16 @@ async def update_work_order(work_order_id: str, wo_up: WorkOrderUpdate, db: Sess
 
 @router.delete("/{work_order_id}", status_code=status.HTTP_200_OK)
 async def delete_work_order(work_order_id: str, db: Session = Depends(get_db)):
-    """Delete work order by work_order_id."""
+    """
+    Delete a work order by work_order_id.
+    
+    Args:
+        work_order_id: Unique order ID.
+        db: Scoped database session.
+        
+    Returns:
+        dict: Success confirmation message.
+    """
     wo = db.query(WorkOrder).filter(WorkOrder.work_order_id == work_order_id).first()
     if not wo:
         raise HTTPException(status_code=404, detail=f"Work Order {work_order_id} not found")
@@ -178,4 +245,3 @@ async def delete_work_order(work_order_id: str, db: Session = Depends(get_db)):
         "data": {"work_order_id": work_order_id}
     })
     return {"status": "success", "message": f"Work order {work_order_id} deleted"}
-

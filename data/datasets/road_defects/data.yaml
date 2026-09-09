@@ -1,0 +1,11 @@
+# Gartika Road Defect Identification Dataset Configuration
+path: /home/da/sih/prototype/data/datasets/road_defects
+train: images/train
+val: images/val
+
+# Road Defect Classes
+names:
+  0: pothole
+  1: longitudinal_crack
+  2: alligator_crack
+  3: manhole

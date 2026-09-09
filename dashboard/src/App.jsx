@@ -1,3 +1,10 @@
+/**
+ * Root React Application Component for Gartika Urban Intelligence Dashboard.
+ * 
+ * Manages central dashboard state (statistics, events feed, active buses, work orders),
+ * handles periodic data synchronization with the backend REST API, and renders top layout views.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { MetricsBar } from './components/MetricsBar';
@@ -5,19 +12,28 @@ import { BusCard } from './components/BusCard';
 import { WorkOrdersList } from './components/WorkOrdersList';
 import { api } from './services/api';
 
+/**
+ * Main App functional component.
+ */
 export function App() {
   const [stats, setStats] = useState({});
   const [events, setEvents] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
-  const [bus, setBus] = useState({ bus_id: 'BUS-101', latitude: 12.971598, longitude: 77.594562, speed: 32.4 });
-  const [sourceMode, setSourceMode] = useState('DEMO');
+  const [bus, setBus] = useState({ bus_id: 'BUS-101', latitude: null, longitude: null, speed: 0.0 });
+  const [sourceMode, setSourceMode] = useState('LIVE');
 
+  /**
+   * Set up initial data fetch and periodic synchronization timer upon component mount.
+   */
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 3500);
     return () => clearInterval(interval);
   }, []);
 
+  /**
+   * Query backend endpoints in parallel to refresh stats, events, work orders, and bus position.
+   */
   const loadData = async () => {
     try {
       const [s, e, wo, b] = await Promise.all([
@@ -35,6 +51,11 @@ export function App() {
     }
   };
 
+  /**
+   * Handle work order status transition (e.g. from OPEN to RESOLVED).
+   * @param {string} woId - Unique work order identifier.
+   * @param {string} newStatus - New status string.
+   */
   const handleStatusChange = async (woId, newStatus) => {
     try {
       await api.updateWorkOrder(woId, { status: newStatus });
@@ -44,6 +65,9 @@ export function App() {
     }
   };
 
+  /**
+   * Post a synthetic high-severity pothole event for demo and testing purposes.
+   */
   const handleSeed = async () => {
     await fetch(`${window.location.origin}/events`, {
       method: 'POST',

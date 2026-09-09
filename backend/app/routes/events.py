@@ -1,3 +1,11 @@
+"""
+Event Management API Routes for Gartika Urban Intelligence.
+
+Handles the ingestion, listing, querying, updating, and deletion of AI-detected
+urban events (potholes, cracks, traffic counts) with transactional database safety
+and real-time WebSocket broadcasting.
+"""
+
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -17,7 +25,20 @@ logger = logging.getLogger("gartika.events")
 
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 async def create_event(event_in: EventCreate, db: Session = Depends(get_db)):
-    """Create and ingest a new AI detected event with transactional safety."""
+    """
+    Create and ingest a new AI detected defect or traffic event.
+    
+    Persists event details to SQLite/PostgreSQL, registers or updates the reporting
+    bus unit's current position and online status, and broadcasts the new event
+    payload immediately to all connected GIS command center dashboards via WebSocket.
+    
+    Args:
+        event_in: Validated EventCreate payload.
+        db: Scoped database session.
+        
+    Returns:
+        Event: Newly persisted Event database record.
+    """
     event_id = event_in.event_id or f"EVT-{uuid.uuid4().hex[:6].upper()}"
     ts = event_in.timestamp or datetime.now(timezone.utc)
     if ts.tzinfo is None:
@@ -70,7 +91,7 @@ async def create_event(event_in: EventCreate, db: Session = Depends(get_db)):
     
     logger.info(f"[API] Event {db_event.event_id} ({db_event.event_type} - {db_event.severity}) saved from {db_event.bus_id}")
     
-    # Real-time WebSocket Broadcast
+    # Real-time WebSocket Broadcast to connected command center clients
     event_dict = {
         "type": "NEW_EVENT",
         "data": {
@@ -105,7 +126,25 @@ def get_events(
     min_confidence: Optional[float] = Query(None, ge=0.0, le=1.0),
     db: Session = Depends(get_db)
 ):
-    """Retrieve list of detected events with extensive filtering and pagination."""
+    """
+    Retrieve a paginated list of events with multi-criteria filtering.
+    
+    Supports filtering by event type, severity, operational status, bus unit,
+    and minimum confidence threshold.
+    
+    Args:
+        limit: Max number of records to return.
+        offset: Number of initial records to skip.
+        event_type: Filter by category (e.g. 'POTHOLE', 'VEHICLE_COUNT').
+        severity: Filter by urgency (e.g. 'HIGH', 'CRITICAL').
+        status_filter: Filter by state (e.g. 'NEW', 'RESOLVED').
+        bus_id: Filter by originating bus ID.
+        min_confidence: Filter by minimum AI confidence score.
+        db: Scoped database session.
+        
+    Returns:
+        list of Event: Matching event records sorted newest first.
+    """
     query = db.query(Event)
     if event_type:
         query = query.filter(Event.event_type == event_type.upper())
@@ -122,7 +161,16 @@ def get_events(
 
 @router.get("/{event_id}", response_model=EventResponse)
 def get_event_by_id(event_id: str, db: Session = Depends(get_db)):
-    """Retrieve single event by event_id."""
+    """
+    Retrieve a single event record by its unique event_id string.
+    
+    Args:
+        event_id: The event code (e.g. 'EVT-POTH-001').
+        db: Scoped database session.
+        
+    Returns:
+        Event: The requested event record.
+    """
     event = db.query(Event).filter(Event.event_id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
@@ -130,7 +178,19 @@ def get_event_by_id(event_id: str, db: Session = Depends(get_db)):
 
 @router.patch("/{event_id}", response_model=EventResponse)
 async def update_event(event_id: str, event_up: EventUpdate, db: Session = Depends(get_db)):
-    """Update event status / severity with transactional safety and WS sync."""
+    """
+    Update an existing event's status, severity, or location name.
+    
+    Synchronizes updates to database and broadcasts UPDATE_EVENT over WebSockets.
+    
+    Args:
+        event_id: The event code to update.
+        event_up: Fields to update.
+        db: Scoped database session.
+        
+    Returns:
+        Event: Updated event entity.
+    """
     event = db.query(Event).filter(Event.event_id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
@@ -163,7 +223,16 @@ async def update_event(event_id: str, event_up: EventUpdate, db: Session = Depen
 
 @router.delete("/{event_id}", status_code=status.HTTP_200_OK)
 async def delete_event(event_id: str, db: Session = Depends(get_db)):
-    """Delete an event by event_id."""
+    """
+    Delete an event record by its unique event_id.
+    
+    Args:
+        event_id: The event code to delete.
+        db: Scoped database session.
+        
+    Returns:
+        dict: Success confirmation message.
+    """
     event = db.query(Event).filter(Event.event_id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
@@ -181,4 +250,3 @@ async def delete_event(event_id: str, db: Session = Depends(get_db)):
         "data": {"event_id": event_id}
     })
     return {"status": "success", "message": f"Event {event_id} deleted"}
-

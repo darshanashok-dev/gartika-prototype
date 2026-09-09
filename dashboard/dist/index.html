@@ -41,7 +41,7 @@
         <div class="status-cluster">
           <div class="status-indicator" id="pillEdge" title="Edge Sensing Unit">
             <span class="dot-led online"></span>
-            <span>Edge Unit: <strong id="valEdge">Active</strong></span>
+            <span>Mobile Unit: <strong id="valEdge">Listening</strong></span>
           </div>
           <div class="status-divider"></div>
           <div class="status-indicator" id="pillBackend" title="FastAPI Engine">
@@ -63,20 +63,12 @@
 
       <!-- Header Actions -->
       <div class="navbar-right">
-        <button class="btn btn-outline" id="btnConnectPhone">
+        <button class="btn btn-primary" id="btnConnectPhone">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
             <line x1="12" y1="18" x2="12.01" y2="18"></line>
           </svg>
-          <span>Connect Phone</span>
-        </button>
-
-        <button class="btn btn-primary" id="btnSeedData">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="23 4 23 10 17 10"></polyline>
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-          </svg>
-          <span>Sync State</span>
+          <span>Connect Mobile Phone</span>
         </button>
       </div>
     </header>
@@ -90,7 +82,7 @@
         <!-- Metric 1: Fleet -->
         <div class="metric-card">
           <div class="metric-top">
-            <span class="metric-title">ACTIVE TRANSIT FLEET</span>
+            <span class="metric-title">CONNECTED MOBILE UNITS</span>
             <div class="metric-icon-wrap blue">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="6" width="18" height="12" rx="2"></rect>
@@ -102,10 +94,10 @@
           </div>
           <div class="metric-stat-row">
             <div class="metric-number" id="metricActiveBuses">0 <span class="metric-unit">Units</span></div>
-            <span class="trend-badge blue">Real-time GPS</span>
+            <span class="trend-badge blue">Live GPS</span>
           </div>
           <div class="metric-meta">
-            Active Unit: <strong id="metricBusId">None</strong> • Route 335E
+            Active Unit: <strong id="metricBusId">Awaiting connection...</strong>
           </div>
         </div>
 
@@ -126,14 +118,14 @@
             <span class="trend-badge red" id="metricHighPriority">0 Critical</span>
           </div>
           <div class="metric-meta">
-            Optical & IMU Sensor Fusion
+            Live Camera & Phone IMU Shock Fusion
           </div>
         </div>
 
         <!-- Metric 3: Traffic Monitored -->
         <div class="metric-card">
           <div class="metric-top">
-            <span class="metric-title">TRAFFIC FLOW MONITORED</span>
+            <span class="metric-title">VEHICLES OBSERVED</span>
             <div class="metric-icon-wrap amber">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
@@ -145,14 +137,14 @@
             <span class="trend-badge amber">Flow Count</span>
           </div>
           <div class="metric-meta">
-            Edge ByteTrack Vehicle Tracking
+            Real-Time Edge ByteTrack Detection
           </div>
         </div>
 
         <!-- Metric 4: Edge Bandwidth Savings -->
         <div class="metric-card">
           <div class="metric-top">
-            <span class="metric-title">BANDWIDTH EFFICIENCY</span>
+            <span class="metric-title">BANDWIDTH SAVINGS</span>
             <div class="metric-icon-wrap green">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
@@ -162,10 +154,10 @@
           </div>
           <div class="metric-stat-row">
             <div class="metric-number text-green">99.97%</div>
-            <span class="trend-badge green">Compression</span>
+            <span class="trend-badge green">Optimized</span>
           </div>
           <div class="metric-meta">
-            ~0.035 GB structured events vs 144 GB raw
+            Structured Edge Events vs Raw 4K Video Stream
           </div>
         </div>
 
@@ -189,14 +181,14 @@
                   </svg>
                 </div>
                 <div>
-                  <h2 class="card-heading">Urban Spatial Map & Fleet Tracking</h2>
-                  <div class="card-subheading">Live GIS coordinates, road defect clusters, and transit corridor coverage</div>
+                  <h2 class="card-heading">Urban Spatial Map & Live Phone GPS</h2>
+                  <div class="card-subheading">Real-time mobile coordinates, detected defect markers, and road breadcrumbs</div>
                 </div>
               </div>
               <div class="card-header-right">
-                <button class="btn btn-sm btn-ghost" id="btnCenterBus" title="Center Map on Bus">
+                <button class="btn btn-sm btn-ghost" id="btnCenterBus" title="Center Map on Phone GPS">
                   <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
-                  <span>Follow Vehicle</span>
+                  <span>Follow Phone</span>
                 </button>
                 <button class="btn btn-sm btn-ghost" id="btnFitAll" title="Fit all events in view">
                   <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
@@ -208,17 +200,17 @@
             <div class="map-view-container">
               <div id="gisMap"></div>
               
-              <!-- Clean Minimal Map Legend -->
+              <!-- Map Legend -->
               <div class="map-legend">
-                <div class="legend-item"><span class="legend-dot bus"></span> Transit Vehicle</div>
-                <div class="legend-item"><span class="legend-dot pothole"></span> Road Defect</div>
-                <div class="legend-item"><span class="legend-dot traffic"></span> Traffic Hotspot</div>
+                <div class="legend-item"><span class="legend-dot bus"></span> Mobile Sensor Unit</div>
+                <div class="legend-item"><span class="legend-dot pothole"></span> Real Defect</div>
+                <div class="legend-item"><span class="legend-dot traffic"></span> Vehicle Cluster</div>
               </div>
 
               <!-- Map Coordinates Footer -->
               <div class="map-footer-bar">
-                <span id="mapCursorCoords" class="font-mono">Lat: 12.9716° N | Lon: 77.5946° E</span>
-                <span class="font-mono">Transit Corridor Network</span>
+                <span id="mapCursorCoords" class="font-mono">Lat: -- | Lon: --</span>
+                <span class="font-mono">Live Sensing Mode</span>
               </div>
             </div>
           </div>
@@ -238,7 +230,7 @@
                 </div>
                 <div>
                   <h2 class="card-heading">Maintenance Work Orders</h2>
-                  <div class="card-subheading">Civic road repair dispatch tickets generated from AI defect detections</div>
+                  <div class="card-subheading">Civic road repair dispatch tickets generated from real defect detections</div>
                 </div>
               </div>
               <div class="card-header-right">
@@ -259,7 +251,7 @@
                     <path d="M9 11l3 3L22 4"></path>
                     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
                   </svg>
-                  <p>No active work orders. Detected defects appear here for dispatch.</p>
+                  <p>No active work orders. Defects detected by mobile camera will appear here for dispatch.</p>
                 </div>
               </div>
             </div>
@@ -281,12 +273,12 @@
                   </svg>
                 </div>
                 <div>
-                  <h2 class="card-heading">Edge Camera Preview</h2>
-                  <div class="card-subheading" id="hudBusTag">BUS-101 • Forward View</div>
+                  <h2 class="card-heading">Live Mobile Camera</h2>
+                  <div class="card-subheading" id="hudBusTag">BUS-101 • Live Phone Stream</div>
                 </div>
               </div>
               <div class="card-header-right">
-                <span class="badge badge-subtle font-mono" id="streamFpsChip">15 FPS</span>
+                <span class="badge badge-subtle font-mono" id="streamFpsChip">LIVE</span>
               </div>
             </div>
 
@@ -294,13 +286,10 @@
               <img id="liveStreamImg" src="/stream/latest-frame" alt="Edge Camera Stream" />
               <div class="stream-placeholder" id="streamPlaceholder">
                 <div class="spinner"></div>
-                <span>Awaiting edge camera feed...</span>
+                <span>Awaiting live camera stream from mobile...</span>
               </div>
               <div class="stream-badge-overlay">
-                <span class="stream-tag font-mono">YOLOv8 + ByteTrack</span>
-                <button class="btn-micro" id="btnManualTriggerBump" title="Inject Simulated Bump Shock">
-                  Test Shock Trigger
-                </button>
+                <span class="stream-tag font-mono">Live YOLOv8 Inference</span>
               </div>
             </div>
 
@@ -308,15 +297,15 @@
             <div class="telemetry-bar">
               <div class="tele-col">
                 <span class="tele-label">SPEED</span>
-                <span class="tele-value font-mono" id="teleSpeed">-- km/h</span>
+                <span class="tele-value font-mono" id="teleSpeed">0.0 km/h</span>
               </div>
               <div class="tele-col">
-                <span class="tele-label">COORDINATES</span>
-                <span class="tele-value font-mono"><span id="teleLat">12.9716</span>, <span id="teleLon">77.5946</span></span>
+                <span class="tele-label">LIVE GPS</span>
+                <span class="tele-value font-mono"><span id="teleLat">--</span>, <span id="teleLon">--</span></span>
               </div>
               <div class="tele-col">
-                <span class="tele-label">Z-ACCELERATION</span>
-                <span class="tele-value font-mono" id="imuValStatus">9.81 m/s² (Normal)</span>
+                <span class="tele-label">PHONE Z-SHOCK</span>
+                <span class="tele-value font-mono" id="imuValStatus">9.81 m/s²</span>
               </div>
             </div>
           </div>
@@ -332,7 +321,7 @@
                 </div>
                 <div>
                   <h2 class="card-heading">Real-Time AI Detections</h2>
-                  <div class="card-subheading">Continuous event stream with confidence scoring</div>
+                  <div class="card-subheading">Live events evaluated from mobile stream</div>
                 </div>
               </div>
               <div class="card-header-right">
@@ -353,7 +342,7 @@
             <!-- Feed List -->
             <div class="feed-list" id="eventFeedScroll">
               <div class="empty-state">
-                <p>Awaiting real-time detections from mobile vehicle stream...</p>
+                <p>Awaiting live detections from mobile camera stream...</p>
               </div>
             </div>
           </div>
@@ -401,7 +390,7 @@
             </div>
             <div class="detail-item">
               <span class="detail-label">GPS COORDINATES</span>
-              <span class="detail-value font-mono" id="modalLocation">12.9716, 77.5946</span>
+              <span class="detail-value font-mono" id="modalLocation">--</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">TIMESTAMP</span>
@@ -429,14 +418,14 @@
       <div class="modal-dialog modal-compact">
         <div class="modal-header">
           <div>
-            <h3 class="modal-title">Connect Mobile Sensing Unit</h3>
-            <div class="modal-meta">Stream live phone camera & accelerometer telemetry</div>
+            <h3 class="modal-title">Connect Mobile Phone as Live Sensor</h3>
+            <div class="modal-meta">Stream real smartphone camera & accelerometer telemetry</div>
           </div>
           <button class="btn-close" id="phoneModalClose">&times;</button>
         </div>
 
         <div class="modal-body text-center">
-          <p class="modal-instruct">Ensure your phone is on the same Wi-Fi network or mobile hotspot, then scan this QR code or open the link in Chrome / Safari:</p>
+          <p class="modal-instruct">Ensure your phone is on the same Wi-Fi or personal hotspot, then scan this QR code or open the link on your mobile browser:</p>
           
           <div class="qr-container" id="qrCodeContainer">
             <div class="qr-placeholder">Generating QR...</div>
@@ -447,7 +436,7 @@
             <button class="btn btn-outline btn-sm" id="btnCopyMobileUrl">Copy</button>
           </div>
 
-          <p class="modal-foot">Provides real-time GPS coordinates, accelerometer bump sensing, and photo uploads to Gartika.</p>
+          <p class="modal-foot">Provides real-time GPS coordinates, live camera streaming, and road shock detection directly to Gartika.</p>
         </div>
 
         <div class="modal-footer">

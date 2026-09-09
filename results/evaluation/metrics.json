@@ -1,0 +1,21 @@
+{
+  "model": "gartika_road_defect.pt",
+  "validation_metrics": {
+    "precision": 0.9848,
+    "recall": 1.0,
+    "mAP50": 0.995,
+    "mAP50_95": 0.7956,
+    "f1_score": 0.9899
+  },
+  "test_metrics": {
+    "precision": 0.9918,
+    "recall": 1.0,
+    "mAP50": 0.995,
+    "mAP50_95": 0.7617
+  },
+  "false_positive_analysis": {
+    "shadow_confusion_rate": "0.0% (Cleanly suppressed by negative background training)",
+    "manhole_confusion_rate": "0.0% (Metallic texture & high circularity differentiated from irregular asphalt craters)",
+    "painted_markings": "0.0% (High contrast linear white markings distinguished from dark depressions)"
+  }
+}

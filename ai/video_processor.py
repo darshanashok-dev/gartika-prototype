@@ -1,3 +1,14 @@
+"""
+End-to-End AI Video Processing Pipeline for Gartika Urban Intelligence.
+
+This module coordinates the complete edge processing lifecycle:
+1. Video Capture (from recorded demo video, synthetic simulation, or live webcam).
+2. Vehicle Detection & Multi-Object Tracking (ByteTrack).
+3. Road Surface Defect & Pothole Detection.
+4. Privacy blurring and structured event generation.
+5. Ingestion to Backend REST API & Live Command Center.
+"""
+
 import os
 import sys
 import time
@@ -30,8 +41,16 @@ logger = logging.getLogger("gartika.ai.processor")
 
 def create_synthetic_road_video(output_path: str, duration_sec: int = 15, fps: int = 25):
     """
-    Generate a high-quality simulated urban road video with vehicles and potholes
-    so demo mode works out-of-the-box without requiring large external downloads.
+    Generate a high-quality simulated urban road video with vehicles and potholes.
+    
+    Renders perspective road asphalt, dashed lane markings, moving cars, buses,
+    and road potholes so demo mode functions out-of-the-box without requiring
+    large external video downloads.
+    
+    Args:
+        output_path: Filepath where the generated MP4 video will be written.
+        duration_sec: Video length in seconds (default: 15).
+        fps: Frame rate for the output video (default: 25).
     """
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     width, height = 854, 480
@@ -122,6 +141,16 @@ def create_synthetic_road_video(output_path: str, duration_sec: int = 15, fps: i
     logger.info("[AI] Demo road video generation complete.")
 
 class VideoProcessor:
+    """
+    Main orchestrator that processes video streams, runs AI models, and posts telemetry.
+    
+    Attributes:
+        source (str): Video source ('demo', video path, or webcam index).
+        bus_id (str): Vehicle identifier.
+        backend_url (str): Base URL of backend REST API.
+        headless (bool): If True, suppresses OpenCV GUI preview windows.
+        loop (bool): If True, loops video indefinitely for live demonstration.
+    """
     def __init__(
         self,
         source: str = "demo",
@@ -130,12 +159,23 @@ class VideoProcessor:
         headless: bool = True,
         loop: bool = True
     ):
+        """
+        Initialize the VideoProcessor pipeline.
+        
+        Args:
+            source: Source path, 'demo', or camera index.
+            bus_id: Unique bus identifier string.
+            backend_url: Target URL for reporting events.
+            headless: Whether to disable desktop display windows.
+            loop: Whether to loop video inputs.
+        """
         self.source = source
         self.bus_id = bus_id
         self.backend_url = backend_url.rstrip("/")
         self.headless = headless
         self.loop = loop
         
+        # Instantiate component engines
         self.detector = VehicleDetector(conf_threshold=settings.CONFIDENCE_THRESHOLD)
         self.tracker = ByteTracker()
         self.pothole_detector = PotholeDetector()
@@ -152,7 +192,12 @@ class VideoProcessor:
         self.current_coord_idx = 0
 
     def get_current_gps(self) -> tuple:
-        """Simulate progressive GPS telemetry along transit route."""
+        """
+        Simulate progressive GPS telemetry along transit route waypoints.
+        
+        Returns:
+            tuple: (latitude, longitude) with subtle realistic sensor jitter.
+        """
         p1 = self.route_coords[self.current_coord_idx]
         p2 = self.route_coords[(self.current_coord_idx + 1) % len(self.route_coords)]
         
@@ -165,7 +210,12 @@ class VideoProcessor:
         return lat, lon
 
     def post_event(self, event_data: dict):
-        """Submit generated event to backend REST API."""
+        """
+        Submit generated event to backend REST API.
+        
+        Args:
+            event_data: Dictionary containing event payload.
+        """
         try:
             url = f"{self.backend_url}/events"
             resp = requests.post(url, json=event_data, timeout=3.0, verify=False)
@@ -177,7 +227,14 @@ class VideoProcessor:
             logger.error(f"[NETWORK] Could not transmit event to backend: {e}")
 
     def post_telemetry(self, lat: float, lon: float, speed: float = 32.5):
-        """Send periodic bus telemetry ping."""
+        """
+        Send periodic bus GPS and IMU accelerometer telemetry ping.
+        
+        Args:
+            lat: Current latitude.
+            lon: Current longitude.
+            speed: Bus velocity in km/h.
+        """
         try:
             url = f"{self.backend_url}/telemetry"
             payload = {
@@ -195,6 +252,13 @@ class VideoProcessor:
             pass
 
     def run(self):
+        """
+        Execute the main video analysis loop.
+        
+        Reads frames sequentially, executes vehicle detection and tracking, detects
+        potholes, generates structured events, submits them to the backend API, and
+        optionally displays an annotated debug window.
+        """
         video_path = self.source
         if self.source == "demo":
             demo_video_file = str(settings.VIDEOS_DIR / "road_demo.mp4")

@@ -1,3 +1,10 @@
+"""
+Bus Fleet Management API Routes for Gartika Urban Intelligence.
+
+Provides REST endpoints for querying active fleet vehicles, registering new buses,
+updating GPS position & operational status, and broadcasting fleet movements.
+"""
+
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -18,7 +25,17 @@ def get_buses(
     status_filter: Optional[str] = Query(None, alias="status"),
     db: Session = Depends(get_db)
 ):
-    """Retrieve all registered buses with optional status filter."""
+    """
+    Retrieve all registered bus units with optional operational status filtering.
+    
+    Args:
+        limit: Maximum number of bus records to retrieve.
+        status_filter: Optional filter ('ONLINE', 'OFFLINE', 'INACTIVE').
+        db: Scoped database session.
+        
+    Returns:
+        list of Bus: List of matching bus units.
+    """
     query = db.query(Bus)
     if status_filter:
         query = query.filter(Bus.status == status_filter.upper())
@@ -26,7 +43,18 @@ def get_buses(
 
 @router.post("", response_model=BusResponse, status_code=status.HTTP_201_CREATED)
 async def create_or_update_bus(bus_in: BusCreate, db: Session = Depends(get_db)):
-    """Register or update a bus unit with transactional safety."""
+    """
+    Register a new bus sensing unit or update an existing unit's state.
+    
+    Commits state changes transactionally and broadcasts BUS_UPDATE over WebSockets.
+    
+    Args:
+        bus_in: Validated BusCreate schema.
+        db: Scoped database session.
+        
+    Returns:
+        Bus: Persisted/updated Bus entity.
+    """
     now_utc = datetime.now(timezone.utc)
     try:
         bus = db.query(Bus).filter(Bus.bus_id == bus_in.bus_id).first()
@@ -78,6 +106,16 @@ async def create_or_update_bus(bus_in: BusCreate, db: Session = Depends(get_db))
 
 @router.get("/{bus_id}", response_model=BusResponse)
 def get_bus(bus_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieve details for a specific bus by its bus_id identifier.
+    
+    Args:
+        bus_id: Unique bus identifier (e.g., 'BUS-101').
+        db: Scoped database session.
+        
+    Returns:
+        Bus: Found bus entity.
+    """
     bus = db.query(Bus).filter(Bus.bus_id == bus_id).first()
     if not bus:
         raise HTTPException(status_code=404, detail=f"Bus {bus_id} not found")
@@ -85,7 +123,16 @@ def get_bus(bus_id: str, db: Session = Depends(get_db)):
 
 @router.delete("/{bus_id}", status_code=status.HTTP_200_OK)
 async def delete_bus(bus_id: str, db: Session = Depends(get_db)):
-    """Delete a bus unit."""
+    """
+    Delete a bus registration from the system.
+    
+    Args:
+        bus_id: Unique bus identifier.
+        db: Scoped database session.
+        
+    Returns:
+        dict: Success confirmation message.
+    """
     bus = db.query(Bus).filter(Bus.bus_id == bus_id).first()
     if not bus:
         raise HTTPException(status_code=404, detail=f"Bus {bus_id} not found")
@@ -103,4 +150,3 @@ async def delete_bus(bus_id: str, db: Session = Depends(get_db)):
         "data": {"bus_id": bus_id}
     })
     return {"status": "success", "message": f"Bus {bus_id} deleted"}
-

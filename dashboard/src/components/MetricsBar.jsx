@@ -1,5 +1,19 @@
+/**
+ * Real-Time Metrics Bar Component for Gartika Urban Intelligence Dashboard.
+ * 
+ * Displays aggregate key performance indicators (KPIs) including active sensing buses,
+ * total events detected today, road defects count, vehicle traffic counts,
+ * critical high priority alerts, and edge bandwidth reduction savings.
+ */
+
 import React from 'react';
 
+/**
+ * MetricsBar React functional component.
+ * 
+ * @param {Object} props
+ * @param {Object} props.stats - Aggregated metrics object returned from /stats endpoint.
+ */
 export const MetricsBar = ({ stats }) => {
   return (
     <section className="metrics-row">

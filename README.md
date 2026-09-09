@@ -96,16 +96,24 @@ pip install -r backend/requirements.txt
 pip install -r ai/requirements.txt
 ```
 
-### Step 2: Start the Central Platform
-Run the startup script:
+### Step 2: Start the Central Platform in Live Mode
+Run the live startup script (strict live mode, 0 fake data):
 ```bash
-./scripts/start_demo.sh
+./scripts/start_live.sh
 ```
 Or run directly via Python:
 ```bash
 python3 -m backend.app.main
 ```
-The terminal will display your local network access URLs (e.g. `http://192.168.0.110:8000`).
+The terminal will display your local network access URLs (e.g. `https://192.168.0.110:8000`).
+
+---
+
+### Optional: Demonstration Mode (For Offline Simulation)
+If you wish to run with pre-generated simulation data for offline testing:
+```bash
+./scripts/start_demo.sh
+```
 
 ---
 

@@ -18,3 +18,7 @@ data/evidence/
 data/videos/*.mp4
 !data/videos/.gitkeep
 
+# Training checkpoints and runs
+runs/
+yolov8*.pt
+dataset/labels/*.cache

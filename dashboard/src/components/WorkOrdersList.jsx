@@ -1,5 +1,19 @@
+/**
+ * Maintenance Work Orders List Component for Gartika Urban Intelligence.
+ * 
+ * Displays active municipal maintenance orders generated from road defects,
+ * showing dispatch title, geographic location, assigned agency, and status dropdowns.
+ */
+
 import React from 'react';
 
+/**
+ * WorkOrdersList React functional component.
+ * 
+ * @param {Object} props
+ * @param {Array<Object>} props.workOrders - List of work order items.
+ * @param {Function} props.onStatusChange - Handler called when a work order's status is changed.
+ */
 export const WorkOrdersList = ({ workOrders, onStatusChange }) => {
   return (
     <div className="panel-card work-orders-panel">

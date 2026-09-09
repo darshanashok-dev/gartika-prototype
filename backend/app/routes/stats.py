@@ -1,3 +1,10 @@
+"""
+System Statistics and Health Check API Routes for Gartika Urban Intelligence.
+
+Provides service health checks, database liveness status, and high-level aggregation
+metrics for the dashboard (active buses, total defects, work orders, bandwidth savings).
+"""
+
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -14,7 +21,12 @@ router = APIRouter(tags=["stats"])
 
 @router.get("/health")
 def health_check(db: Session = Depends(get_db)):
-    """Health check endpoint for backend, DB, and AI system status."""
+    """
+    Health check endpoint for verifying backend, database, and edge service connectivity.
+    
+    Returns:
+        dict: Operational statuses, project metadata, local IP, and current mode (LIVE or DEMO).
+    """
     db_ok = True
     try:
         db.execute(func.now()).first()
@@ -37,7 +49,18 @@ def health_check(db: Session = Depends(get_db)):
 @router.get("/stats")
 @router.get("/stats/summary")
 def get_stats(db: Session = Depends(get_db)):
-    """System-wide summary statistics for dashboard with accurate counts."""
+    """
+    Compute system-wide summary metrics for real-time dashboard KPIs.
+    
+    Aggregates active bus count, total road defect count, total vehicles detected,
+    high priority events, open and resolved work orders, and edge bandwidth reduction estimates.
+    
+    Args:
+        db: Scoped database session.
+        
+    Returns:
+        dict: Aggregated statistical indicators.
+    """
     now_utc = datetime.now(timezone.utc)
     # Consider active if seen in the last 2 minutes or explicitly ONLINE
     active_cutoff = now_utc - timedelta(minutes=2)
@@ -47,7 +70,7 @@ def get_stats(db: Session = Depends(get_db)):
         (Bus.status == "ONLINE") & (Bus.last_seen >= active_cutoff)
     ).count()
     
-    # In demo mode, show at least 1 if buses exist
+    # In demo mode, show at least 1 active unit if buses exist
     if settings.DEMO_MODE and total_buses > 0 and active_buses == 0:
         active_buses = 1
         
@@ -92,4 +115,3 @@ def get_stats(db: Session = Depends(get_db)):
             "bandwidth_reduction_pct": 99.97
         }
     }
-

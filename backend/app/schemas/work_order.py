@@ -1,8 +1,17 @@
+"""
+Work Order Pydantic Data Schemas for Gartika Urban Intelligence.
+
+Defines validation and serialization models for municipal maintenance orders.
+"""
+
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timezone
 from typing import Optional
 
 class WorkOrderBase(BaseModel):
+    """
+    Base properties shared across WorkOrder schemas.
+    """
     event_id: str
     title: str
     description: Optional[str] = None
@@ -15,15 +24,24 @@ class WorkOrderBase(BaseModel):
     source_bus_id: Optional[str] = "BUS-101"
 
 class WorkOrderCreate(WorkOrderBase):
+    """
+    Schema for creating a new maintenance dispatch order.
+    """
     work_order_id: Optional[str] = None
 
 class WorkOrderUpdate(BaseModel):
+    """
+    Schema for modifying work order status, priority, or assignment.
+    """
     status: Optional[str] = None
     priority: Optional[str] = None
     assigned_to: Optional[str] = None
     description: Optional[str] = None
 
 class WorkOrderResponse(WorkOrderBase):
+    """
+    Schema for serializing a WorkOrder database entity to JSON response.
+    """
     id: int
     work_order_id: str
     created_at: datetime

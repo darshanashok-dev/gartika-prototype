@@ -1,3 +1,10 @@
+"""
+AI Computer Vision Pipeline Unit Tests for Gartika Urban Intelligence.
+
+Validates IoU bounding-box overlap math, ByteTrack multi-object persistence,
+pothole detection, IMU vibration sensor fusion boosts, and event deduplication.
+"""
+
 import sys
 import unittest
 import numpy as np
@@ -14,13 +21,18 @@ from ai.event_generator import EventGenerator, haversine_distance
 from ai.video_processor import VideoProcessor, create_synthetic_road_video
 
 class TestAiPipeline(unittest.TestCase):
+    """
+    Test suite for AI and Computer Vision sub-modules.
+    """
     def setUp(self):
+        """Set up fresh instances of detectors, trackers, and event generators."""
         self.detector = VehicleDetector(conf_threshold=0.3)
         self.tracker = ByteTracker(max_lost_frames=10, iou_threshold=0.2)
         self.pothole_detector = PotholeDetector(conf_threshold=0.4)
         self.event_gen = EventGenerator(cooldown_seconds=2.0, distance_threshold_meters=15.0)
 
     def test_01_iou_calculation(self):
+        """Verify IoU intersection over union computation accuracy."""
         box1 = [10, 10, 50, 50]
         box2 = [10, 10, 50, 50]
         iou_exact = calculate_iou(box1, box2)
@@ -31,6 +43,7 @@ class TestAiPipeline(unittest.TestCase):
         self.assertEqual(iou_none, 0.0)
 
     def test_02_tracker_persistence(self):
+        """Verify ByteTracker maintains persistent object IDs across frames."""
         dets_frame1 = [
             {"bbox": [50, 50, 120, 120], "class_name": "car", "confidence": 0.9},
             {"bbox": [200, 100, 260, 180], "class_name": "bus", "confidence": 0.85}
@@ -52,6 +65,7 @@ class TestAiPipeline(unittest.TestCase):
         self.assertEqual(tracks2[1]["track_id"], id2)
 
     def test_03_pothole_detector_and_imu_fusion(self):
+        """Verify road defect visual detection and IMU vibration confidence boost."""
         # Create test frame with dark depression in road region
         frame = np.ones((480, 640, 3), dtype=np.uint8) * 120
         # Road region
@@ -75,6 +89,7 @@ class TestAiPipeline(unittest.TestCase):
         self.assertEqual(defects_fused[0]["vibration_level"], "HIGH")
 
     def test_04_event_generator_deduplication(self):
+        """Verify duplicate events occurring within spatiotemporal threshold are suppressed."""
         defect = {
             "event_type": "POTHOLE",
             "confidence": 0.92,
@@ -105,11 +120,13 @@ class TestAiPipeline(unittest.TestCase):
         self.assertIsNone(evt2)
 
     def test_05_haversine_distance(self):
+        """Verify Haversine formula calculation between GPS coordinates."""
         # Distance between Bangalore MG Road and Trinity Circle (~800m)
         d = haversine_distance(12.971598, 77.594562, 12.972854, 77.601243)
         self.assertTrue(500 < d < 1200)
 
     def test_06_synthetic_video_creation(self):
+        """Verify synthetic road video generation utility creates valid MP4 file."""
         test_video_path = "/tmp/test_road.mp4"
         create_synthetic_road_video(test_video_path, duration_sec=1, fps=10)
         self.assertTrue(Path(test_video_path).exists())

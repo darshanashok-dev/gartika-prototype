@@ -1,3 +1,10 @@
+"""
+End-to-End System Integration Test Suite for Gartika Urban Intelligence.
+
+Validates health checks, aggregation stats, event ingestion, maintenance work order
+lifecycles, sensor shock detection, and static web app route availability.
+"""
+
 import sys
 import unittest
 from pathlib import Path
@@ -13,12 +20,17 @@ from backend.app.models.event import Event
 from backend.app.models.work_order import WorkOrder
 
 class TestGartikaE2E(unittest.TestCase):
+    """
+    End-to-end unit test case suite.
+    """
     @classmethod
     def setUpClass(cls):
+        """Initialize database schema tables and instantiate FastAPI TestClient."""
         Base.metadata.create_all(bind=engine)
         cls.client = TestClient(app)
 
     def test_01_health(self):
+        """Test /health endpoint to verify API and DB status."""
         resp = self.client.get("/health")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -27,6 +39,7 @@ class TestGartikaE2E(unittest.TestCase):
         print("✓ Health check endpoint passed")
 
     def test_02_stats(self):
+        """Test /stats endpoint for dashboard aggregations."""
         resp = self.client.get("/stats")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -34,6 +47,7 @@ class TestGartikaE2E(unittest.TestCase):
         print("✓ Stats endpoint passed")
 
     def test_03_create_and_get_event(self):
+        """Test creating an AI detection event and creating a maintenance work order from it."""
         payload = {
             "bus_id": "BUS-101",
             "event_type": "POTHOLE",
@@ -69,6 +83,7 @@ class TestGartikaE2E(unittest.TestCase):
         print(f"✓ Work order creation passed: {wo_data['work_order_id']}")
 
     def test_04_telemetry_ingestion(self):
+        """Test /telemetry endpoint for GPS and accelerometer sensor ingestion."""
         payload = {
             "bus_id": "BUS-101",
             "latitude": 12.9755,
@@ -77,13 +92,14 @@ class TestGartikaE2E(unittest.TestCase):
             "speed": 34.0,
             "ax": 0.1,
             "ay": 0.2,
-            "az": 14.5 # bump
+            "az": 14.5 # bump shock
         }
         resp = self.client.post("/telemetry", json=payload)
         self.assertEqual(resp.status_code, 201)
         print("✓ Telemetry ingestion passed")
 
     def test_05_static_routes(self):
+        """Test static mounting of Mobile UI and Dashboard HTML pages."""
         resp = self.client.get("/mobile/")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("GARTIKA EDGE UNIT", resp.text)

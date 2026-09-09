@@ -1,3 +1,10 @@
+"""
+Live Environment Reset Script for Gartika Urban Intelligence.
+
+Purges mock demonstration records from the database, removes synthetic evidence images,
+and updates the .env configuration file to set DEMO_MODE=false for live operations.
+"""
+
 import sys
 import os
 from pathlib import Path
@@ -13,6 +20,9 @@ from backend.app.models.telemetry import Telemetry
 from backend.app.config import settings
 
 def reset_to_live():
+    """
+    Purge all database tables, wipe old evidence frames, and switch system mode to LIVE.
+    """
     print("[RESET] Purging all synthetic records from database...")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()

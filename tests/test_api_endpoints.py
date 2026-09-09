@@ -1,3 +1,10 @@
+"""
+FastAPI REST & WebSocket API Endpoint Integration Tests for Gartika Urban Intelligence.
+
+Validates bus fleet creation, event filtering and patching, work order lifecycle
+state transitions, real-time WebSocket protocol handling, and frame streaming uploads.
+"""
+
 import sys
 import unittest
 import io
@@ -14,12 +21,17 @@ from backend.app.models.event import Event
 from backend.app.models.work_order import WorkOrder
 
 class TestApiEndpoints(unittest.TestCase):
+    """
+    REST & WebSocket API test suite.
+    """
     @classmethod
     def setUpClass(cls):
+        """Set up database tables and initialize TestClient."""
         Base.metadata.create_all(bind=engine)
         cls.client = TestClient(app)
 
     def test_01_bus_registration_and_list(self):
+        """Test POST /buses to register new vehicle and GET /buses to list fleet."""
         bus_payload = {
             "bus_id": "BUS-202",
             "name": "Electric Transit Unit 202",
@@ -39,6 +51,7 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertIn("BUS-202", bus_ids)
 
     def test_02_event_filtering_and_patching(self):
+        """Test POST /events to create defect, GET with filter query, and PATCH to update status."""
         pothole_res = self.client.post("/events", json={
             "bus_id": "BUS-101",
             "event_type": "POTHOLE",
@@ -61,6 +74,7 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertEqual(patch_res.json()["status"], "REVIEWED")
 
     def test_03_work_order_full_lifecycle(self):
+        """Test complete workflow: defect detected -> work order created -> marked resolved -> event synced."""
         evt_res = self.client.post("/events", json={
             "bus_id": "BUS-101",
             "event_type": "ROAD_DEFECT",
@@ -91,6 +105,7 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertEqual(evt_check.json()["status"], "RESOLVED")
 
     def test_04_websocket_connection(self):
+        """Test real-time WebSocket connection establishment and ping-pong loop."""
         with self.client.websocket_connect("/ws/events") as websocket:
             init_data = websocket.receive_json()
             self.assertEqual(init_data.get("type"), "CONNECTION_ESTABLISHED")
@@ -100,6 +115,7 @@ class TestApiEndpoints(unittest.TestCase):
             self.assertEqual(data, "pong")
 
     def test_05_stream_frame_upload_and_preview(self):
+        """Test multipart live frame upload and subsequent retrieval from /stream/latest-frame."""
         dummy_jpeg = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.\' \",#\x1c\x1c(7),01444\x1f\'9=82<.342\xff\xc0\x00\x0b\x08\x00\n\x00\n\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9')
         res = self.client.post("/stream/frame", data={"bus_id": "BUS-101"}, files={"frame": ("frame.jpg", dummy_jpeg, "image/jpeg")})
         self.assertEqual(res.status_code, 200)
@@ -110,6 +126,7 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertEqual(preview_res.headers["content-type"], "image/jpeg")
 
     def test_06_telemetry_bump_sensor_fusion(self):
+        """Test telemetry ingestion with vertical bump shock trigger."""
         res = self.client.post("/telemetry", json={
             "bus_id": "BUS-101",
             "latitude": 12.9754,

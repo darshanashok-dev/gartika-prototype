@@ -1,5 +1,21 @@
+/**
+ * Top Navigation Header Component for Gartika Urban Intelligence Dashboard.
+ * 
+ * Displays brand logo, real-time subsystem operational indicators (Edge Unit, Backend, AI Engine, GPS),
+ * ingestion mode switch, and quick action buttons for pairing mobile phones and seeding demo data.
+ */
+
 import React from 'react';
 
+/**
+ * Header React functional component.
+ * 
+ * @param {Object} props
+ * @param {Function} props.onOpenPhoneModal - Callback to trigger QR connection dialog.
+ * @param {Function} props.onSeedData - Callback to trigger demo dataset initialization.
+ * @param {string} props.sourceMode - Active ingestion mode ('DEMO' or 'LIVE').
+ * @param {Function} props.setSourceMode - State setter for ingestion mode.
+ */
 export const Header = ({ onOpenPhoneModal, onSeedData, sourceMode, setSourceMode }) => {
   return (
     <header className="top-nav">
