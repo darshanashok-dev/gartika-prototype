@@ -3,353 +3,467 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gartika — AI Urban Intelligence Command Center</title>
+  <title>Gartika — Mobile Urban Intelligence</title>
   
-  <!-- Leaflet CSS -->
+  <!-- Leaflet GIS CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <!-- Fonts -->
+  <!-- Typography: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="dashboard-layout">
+  <div class="app-layout">
     
-    <!-- Top Navigation / Header -->
-    <header class="top-nav">
-      <div class="nav-left">
-        <div class="logo-mark">
-          <span class="logo-icon">▲</span>
-        </div>
-        <div class="brand-titles">
-          <div class="brand-name">GARTIKA <span class="badge-sih">SIH 2026</span></div>
-          <div class="brand-tagline">AI-Powered Mobile Urban Intelligence Platform • <em>Sense. Analyze. Predict. Act.</em></div>
-        </div>
-      </div>
-
-      <!-- System Status Bar -->
-      <div class="nav-center">
-        <div class="system-status-pills">
-          <div class="sys-pill online" id="statusEdge">
-            <span class="pulse-dot"></span>
-            <span>EDGE UNIT: <strong id="edgeStatusText">ONLINE</strong></span>
+    <!-- Top Navigation Header -->
+    <header class="navbar">
+      <div class="navbar-left">
+        <div class="brand-logo">
+          <div class="logo-symbol">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+            </svg>
           </div>
-          <div class="sys-pill online" id="statusBackend">
-            <span class="pulse-dot"></span>
-            <span>BACKEND: <strong id="backendStatusText">ONLINE</strong></span>
-          </div>
-          <div class="sys-pill online" id="statusAi">
-            <span class="pulse-dot"></span>
-            <span>AI ENGINE: <strong id="aiStatusText">ONLINE</strong></span>
-          </div>
-          <div class="sys-pill online" id="statusGps">
-            <span class="pulse-dot"></span>
-            <span>GPS: <strong id="gpsStatusText">ACTIVE</strong></span>
+          <div class="brand-details">
+            <div class="brand-title">
+              <span>GARTIKA</span>
+              <span class="badge-tag">SIH 2026</span>
+            </div>
+            <div class="brand-subtitle">AI-Powered Mobile Urban Intelligence Platform</div>
           </div>
         </div>
       </div>
 
-      <div class="nav-right">
-        <div class="source-toggle-badge" id="sourceBadge">
-          <span class="source-icon">📡</span>
-          <span class="source-text">SOURCE: <strong id="sourceLabel">DEMO VIDEO</strong></span>
+      <!-- Live Heartbeat Status Indicators -->
+      <div class="navbar-center">
+        <div class="status-cluster">
+          <div class="status-indicator" id="pillEdge" title="Edge Sensing Unit">
+            <span class="dot-led online"></span>
+            <span>Edge Unit: <strong id="valEdge">Active</strong></span>
+          </div>
+          <div class="status-divider"></div>
+          <div class="status-indicator" id="pillBackend" title="FastAPI Engine">
+            <span class="dot-led online"></span>
+            <span>Backend: <strong id="valBackend">Healthy</strong></span>
+          </div>
+          <div class="status-divider"></div>
+          <div class="status-indicator" id="pillAi" title="Edge Computer Vision">
+            <span class="dot-led online"></span>
+            <span>AI Model: <strong id="valAi">Ready</strong></span>
+          </div>
+          <div class="status-divider"></div>
+          <div class="status-indicator" id="pillWs" title="Live WebSocket Stream">
+            <span class="dot-led online"></span>
+            <span>WebSocket: <strong id="valWs">Connected</strong></span>
+          </div>
         </div>
-        <button class="btn-action-sm" id="btnMobileUrl" title="Mobile Edge Connect Info">
-          📱 Connect Phone
+      </div>
+
+      <!-- Header Actions -->
+      <div class="navbar-right">
+        <button class="btn btn-outline" id="btnConnectPhone">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+          </svg>
+          <span>Connect Phone</span>
         </button>
-        <button class="btn-action-sm primary" id="btnSeedData" title="Seed Demo Data">
-          ⚡ Seed Demo Data
+
+        <button class="btn btn-primary" id="btnSeedData">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+          <span>Sync State</span>
         </button>
       </div>
     </header>
 
-    <!-- Key Metrics Row -->
-    <section class="metrics-row">
-      <div class="metric-card">
-        <div class="metric-icon bus-icon">🚌</div>
-        <div class="metric-info">
-          <div class="metric-label">ACTIVE BUSES</div>
-          <div class="metric-number" id="statActiveBuses">1</div>
-          <div class="metric-sub">Fleet Unit BUS-101</div>
-        </div>
-      </div>
-
-      <div class="metric-card">
-        <div class="metric-icon event-icon">⚡</div>
-        <div class="metric-info">
-          <div class="metric-label">EVENTS TODAY</div>
-          <div class="metric-number" id="statTotalEvents">0</div>
-          <div class="metric-sub">Geotagged AI detections</div>
-        </div>
-      </div>
-
-      <div class="metric-card danger">
-        <div class="metric-icon defect-icon">🕳️</div>
-        <div class="metric-info">
-          <div class="metric-label">ROAD DEFECTS</div>
-          <div class="metric-number" id="statRoadDefects">0</div>
-          <div class="metric-sub">Potholes & Cracks</div>
-        </div>
-      </div>
-
-      <div class="metric-card warning">
-        <div class="metric-icon traffic-icon">🚗</div>
-        <div class="metric-info">
-          <div class="metric-label">VEHICLES DETECTED</div>
-          <div class="metric-number" id="statVehicles">0</div>
-          <div class="metric-sub">ByteTrack tracked IDs</div>
-        </div>
-      </div>
-
-      <div class="metric-card critical">
-        <div class="metric-icon priority-icon">🚨</div>
-        <div class="metric-info">
-          <div class="metric-label">HIGH PRIORITY</div>
-          <div class="metric-number" id="statHighPriority">0</div>
-          <div class="metric-sub">Action required</div>
-        </div>
-      </div>
-
-      <div class="metric-card bandwidth-card">
-        <div class="metric-icon data-icon">📉</div>
-        <div class="metric-info">
-          <div class="metric-label">BANDWIDTH SAVINGS</div>
-          <div class="metric-number" style="color:#00f2fe;">99.97%</div>
-          <div class="metric-sub"><span class="estimate-tag">DESIGN ESTIMATE</span> ~0.035 vs 144 GB/day</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Main Workspace: Left Bus & Bandwidth Panel, Center GIS Map, Right Live Event Feed -->
-    <main class="main-grid">
+    <!-- Main Workspace Container -->
+    <div class="dashboard-body">
       
-      <!-- Left Sidebar: Bus Card & Bandwidth Detail -->
-      <aside class="left-sidebar">
+      <!-- Top Metrics Row (4 Cards) -->
+      <section class="metrics-grid">
         
-        <!-- Bus Status Card -->
-        <div class="panel-card bus-panel">
-          <div class="panel-header">
-            <div class="panel-title">MOBILE SENSING UNIT</div>
-            <span class="status-chip active" id="busStatusChip">ACTIVE</span>
-          </div>
-          
-          <div class="bus-hero">
-            <div class="bus-id-large" id="cardBusId">BUS-101</div>
-            <div class="bus-name" id="cardBusName">BMTC Urban Sense (Electric)</div>
-            <div class="bus-route">Route 335E: Majestic ➔ Whitefield</div>
-          </div>
-
-          <div class="bus-details-grid">
-            <div class="bus-detail-item">
-              <span class="b-label">LATITUDE</span>
-              <span class="b-val" id="busLat">12.971598</span>
-            </div>
-            <div class="bus-detail-item">
-              <span class="b-label">LONGITUDE</span>
-              <span class="b-val" id="busLon">77.594562</span>
-            </div>
-            <div class="bus-detail-item">
-              <span class="b-label">SPEED</span>
-              <span class="b-val" id="busSpeed">31.2 km/h</span>
-            </div>
-            <div class="bus-detail-item">
-              <span class="b-label">LAST SEEN</span>
-              <span class="b-val" id="busLastSeen">Just now</span>
+        <!-- Metric 1: Fleet -->
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-title">ACTIVE TRANSIT FLEET</span>
+            <div class="metric-icon-wrap blue">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="6" width="18" height="12" rx="2"></rect>
+                <circle cx="7" cy="18" r="2"></circle>
+                <circle cx="17" cy="18" r="2"></circle>
+                <path d="M7 6v-2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v2"></path>
+              </svg>
             </div>
           </div>
-
-          <!-- Video Mode Toggle -->
-          <div class="video-mode-selector">
-            <div class="v-mode-label">AI INGESTION SOURCE:</div>
-            <div class="v-mode-buttons">
-              <button class="v-btn active" id="btnModeDemo">DEMO ROAD VIDEO</button>
-              <button class="v-btn" id="btnModeLive">LIVE PHONE CAMERA</button>
-            </div>
+          <div class="metric-stat-row">
+            <div class="metric-number" id="metricActiveBuses">0 <span class="metric-unit">Units</span></div>
+            <span class="trend-badge blue">Real-time GPS</span>
+          </div>
+          <div class="metric-meta">
+            Active Unit: <strong id="metricBusId">None</strong> • Route 335E
           </div>
         </div>
 
-        <!-- Bandwidth Demonstration Card -->
-        <div class="panel-card bandwidth-panel">
-          <div class="panel-header">
-            <div class="panel-title">EDGE VS CLOUD BANDWIDTH</div>
-            <span class="estimate-pill">DESIGN ESTIMATE</span>
-          </div>
-
-          <p class="bw-desc">Edge AI filters continuous video frames locally, transmitting only structured metadata.</p>
-          
-          <div class="bw-bars">
-            <div class="bw-bar-item">
-              <div class="bw-bar-header">
-                <span>Continuous Raw Video Stream</span>
-                <strong>~144.0 GB / day</strong>
-              </div>
-              <div class="bw-progress-track">
-                <div class="bw-progress-fill raw" style="width: 100%;"></div>
-              </div>
-            </div>
-
-            <div class="bw-bar-item">
-              <div class="bw-bar-header">
-                <span>Gartika Edge Event Telemetry</span>
-                <strong style="color: #00f2fe;">~0.035 GB / day</strong>
-              </div>
-              <div class="bw-progress-track">
-                <div class="bw-progress-fill structured" style="width: 1.5%;"></div>
-              </div>
+        <!-- Metric 2: Road Defects -->
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-title">ROAD DEFECTS DETECTED</span>
+            <div class="metric-icon-wrap red">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 2 22 22 22"></polygon>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
             </div>
           </div>
-
-          <div class="bw-footer">
-            <span class="bw-chip">✓ 99.97% Transmission Reduction</span>
-            <span class="bw-chip">✓ Privacy Preserved</span>
+          <div class="metric-stat-row">
+            <div class="metric-number" id="metricRoadDefects">0</div>
+            <span class="trend-badge red" id="metricHighPriority">0 Critical</span>
+          </div>
+          <div class="metric-meta">
+            Optical & IMU Sensor Fusion
           </div>
         </div>
 
-        <!-- Work Orders Quick List -->
-        <div class="panel-card work-orders-panel">
-          <div class="panel-header">
-            <div class="panel-title">MAINTENANCE WORK ORDERS</div>
-            <span class="count-badge" id="woCount">0</span>
+        <!-- Metric 3: Traffic Monitored -->
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-title">TRAFFIC FLOW MONITORED</span>
+            <div class="metric-icon-wrap amber">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </div>
           </div>
-          <div class="wo-list" id="woListContainer">
-            <div class="empty-state">No work orders created yet. Click an event to dispatch maintenance.</div>
+          <div class="metric-stat-row">
+            <div class="metric-number" id="metricVehicles">0 <span class="metric-unit">Vehicles</span></div>
+            <span class="trend-badge amber">Flow Count</span>
+          </div>
+          <div class="metric-meta">
+            Edge ByteTrack Vehicle Tracking
+          </div>
+        </div>
+
+        <!-- Metric 4: Edge Bandwidth Savings -->
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-title">BANDWIDTH EFFICIENCY</span>
+            <div class="metric-icon-wrap green">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                <polyline points="17 6 23 6 23 12"></polyline>
+              </svg>
+            </div>
+          </div>
+          <div class="metric-stat-row">
+            <div class="metric-number text-green">99.97%</div>
+            <span class="trend-badge green">Compression</span>
+          </div>
+          <div class="metric-meta">
+            ~0.035 GB structured events vs 144 GB raw
           </div>
         </div>
 
-      </aside>
-
-      <!-- Center: GIS Map -->
-      <section class="center-map-section">
-        <div class="map-container-wrapper">
-          <div id="gisMap"></div>
-          
-          <!-- Map Overlay HUD Controls -->
-          <div class="map-hud-legend">
-            <div class="legend-title">GIS LAYER LEGEND</div>
-            <div class="legend-item"><span class="leg-marker bus"></span> Sensing Bus (BUS-101)</div>
-            <div class="legend-item"><span class="leg-marker pothole"></span> Road Defect / Pothole</div>
-            <div class="legend-item"><span class="leg-marker traffic"></span> Traffic Density Count</div>
-          </div>
-
-          <div class="map-hud-actions">
-            <button class="map-btn" id="btnCenterBus" title="Recenter on Bus">📍 Follow Bus</button>
-            <button class="map-btn" id="btnFitAll" title="Fit all markers">🗺️ Fit View</button>
-          </div>
-        </div>
       </section>
 
-      <!-- Right: Real-Time Event Feed -->
-      <aside class="right-sidebar">
-        <div class="panel-card events-feed-panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <span class="live-pulse"></span>
-              REAL-TIME AI EVENT FEED
+      <!-- Main 2-Column Command Workspace -->
+      <main class="workspace-layout">
+        
+        <!-- Left Column: Interactive GIS Map & Work Orders (65% width) -->
+        <div class="workspace-main">
+          
+          <!-- GIS Interactive Map Card -->
+          <div class="card map-card">
+            <div class="card-header">
+              <div class="card-header-left">
+                <div class="header-icon">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                    <line x1="8" y1="2" x2="8" y2="18"></line>
+                    <line x1="16" y1="6" x2="16" y2="22"></line>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="card-heading">Urban Spatial Map & Fleet Tracking</h2>
+                  <div class="card-subheading">Live GIS coordinates, road defect clusters, and transit corridor coverage</div>
+                </div>
+              </div>
+              <div class="card-header-right">
+                <button class="btn btn-sm btn-ghost" id="btnCenterBus" title="Center Map on Bus">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+                  <span>Follow Vehicle</span>
+                </button>
+                <button class="btn btn-sm btn-ghost" id="btnFitAll" title="Fit all events in view">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                  <span>Fit View</span>
+                </button>
+              </div>
             </div>
-            <button class="btn-refresh" id="btnRefreshEvents" title="Refresh">↻</button>
+
+            <div class="map-view-container">
+              <div id="gisMap"></div>
+              
+              <!-- Clean Minimal Map Legend -->
+              <div class="map-legend">
+                <div class="legend-item"><span class="legend-dot bus"></span> Transit Vehicle</div>
+                <div class="legend-item"><span class="legend-dot pothole"></span> Road Defect</div>
+                <div class="legend-item"><span class="legend-dot traffic"></span> Traffic Hotspot</div>
+              </div>
+
+              <!-- Map Coordinates Footer -->
+              <div class="map-footer-bar">
+                <span id="mapCursorCoords" class="font-mono">Lat: 12.9716° N | Lon: 77.5946° E</span>
+                <span class="font-mono">Transit Corridor Network</span>
+              </div>
+            </div>
           </div>
 
-          <div class="event-feed-stream" id="eventFeedStream">
-            <div class="empty-state">Awaiting AI detected events from mobile sensor...</div>
+          <!-- Municipal Maintenance Work Orders Table -->
+          <div class="card work-orders-card">
+            <div class="card-header">
+              <div class="card-header-left">
+                <div class="header-icon">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="card-heading">Maintenance Work Orders</h2>
+                  <div class="card-subheading">Civic road repair dispatch tickets generated from AI defect detections</div>
+                </div>
+              </div>
+              <div class="card-header-right">
+                <select class="form-select" id="woFilterSelect">
+                  <option value="ALL">All Statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="ASSIGNED">Assigned</option>
+                  <option value="IN PROGRESS">In Progress</option>
+                  <option value="RESOLVED">Resolved</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <div class="wo-items-list" id="woItemsContainer">
+                <div class="empty-state">
+                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M9 11l3 3L22 4"></path>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                  </svg>
+                  <p>No active work orders. Detected defects appear here for dispatch.</p>
+                </div>
+              </div>
+            </div>
           </div>
+
         </div>
-      </aside>
 
-    </main>
+        <!-- Right Column: Vehicle Telemetry, Edge Camera & AI Detection Stream (35% width) -->
+        <aside class="workspace-sidebar">
+          
+          <!-- Edge Camera Stream Card -->
+          <div class="card stream-card">
+            <div class="card-header">
+              <div class="card-header-left">
+                <div class="header-icon">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="card-heading">Edge Camera Preview</h2>
+                  <div class="card-subheading" id="hudBusTag">BUS-101 • Forward View</div>
+                </div>
+              </div>
+              <div class="card-header-right">
+                <span class="badge badge-subtle font-mono" id="streamFpsChip">15 FPS</span>
+              </div>
+            </div>
 
-    <!-- Modal: Event Inspection & Work Order Creation -->
-    <div class="modal-backdrop" id="eventModal">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="modal-title-group">
-            <span class="modal-badge danger" id="modalSeverityBadge">HIGH SEVERITY</span>
-            <h2 class="modal-title" id="modalEventTitle">ROAD DEFECT DETECTED</h2>
-            <div class="modal-sub" id="modalEventId">EVT-POTH-A19C</div>
+            <div class="stream-viewport">
+              <img id="liveStreamImg" src="/stream/latest-frame" alt="Edge Camera Stream" />
+              <div class="stream-placeholder" id="streamPlaceholder">
+                <div class="spinner"></div>
+                <span>Awaiting edge camera feed...</span>
+              </div>
+              <div class="stream-badge-overlay">
+                <span class="stream-tag font-mono">YOLOv8 + ByteTrack</span>
+                <button class="btn-micro" id="btnManualTriggerBump" title="Inject Simulated Bump Shock">
+                  Test Shock Trigger
+                </button>
+              </div>
+            </div>
+
+            <!-- Telemetry Matrix Bar -->
+            <div class="telemetry-bar">
+              <div class="tele-col">
+                <span class="tele-label">SPEED</span>
+                <span class="tele-value font-mono" id="teleSpeed">-- km/h</span>
+              </div>
+              <div class="tele-col">
+                <span class="tele-label">COORDINATES</span>
+                <span class="tele-value font-mono"><span id="teleLat">12.9716</span>, <span id="teleLon">77.5946</span></span>
+              </div>
+              <div class="tele-col">
+                <span class="tele-label">Z-ACCELERATION</span>
+                <span class="tele-value font-mono" id="imuValStatus">9.81 m/s² (Normal)</span>
+              </div>
+            </div>
           </div>
-          <button class="modal-close" id="modalCloseBtn">&times;</button>
+
+          <!-- Real-Time AI Detection Feed -->
+          <div class="card feed-card">
+            <div class="card-header">
+              <div class="card-header-left">
+                <div class="header-icon">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="card-heading">Real-Time AI Detections</h2>
+                  <div class="card-subheading">Continuous event stream with confidence scoring</div>
+                </div>
+              </div>
+              <div class="card-header-right">
+                <button class="btn-icon" id="btnRefreshEvents" title="Refresh Feed">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="filter-tabs">
+              <button class="tab-btn active" data-filter="ALL">All</button>
+              <button class="tab-btn" data-filter="POTHOLE">Potholes</button>
+              <button class="tab-btn" data-filter="VEHICLE_COUNT">Traffic</button>
+              <button class="tab-btn" data-filter="HIGH">Critical</button>
+            </div>
+
+            <!-- Feed List -->
+            <div class="feed-list" id="eventFeedScroll">
+              <div class="empty-state">
+                <p>Awaiting real-time detections from mobile vehicle stream...</p>
+              </div>
+            </div>
+          </div>
+
+        </aside>
+
+      </main>
+    </div>
+
+    <!-- Modal: Evidence Inspector & Work Order Creation -->
+    <div class="modal-backdrop" id="eventModal">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div>
+            <span class="badge badge-red" id="modalSeverityTag">HIGH SEVERITY</span>
+            <h3 class="modal-title" id="modalEventTitle">Road Defect Inspection</h3>
+            <div class="modal-meta font-mono" id="modalEventId">EVT-0000</div>
+          </div>
+          <button class="btn-close" id="modalCloseBtn">&times;</button>
         </div>
 
         <div class="modal-body">
-          <!-- Evidence Image & Detection Preview -->
-          <div class="modal-evidence-box">
-            <div class="evidence-header">
-              <span>VISUAL EVIDENCE (LOCAL EDGE CAPTURE)</span>
-              <span class="privacy-badge">🔒 Faces / Plates Anonymized</span>
-            </div>
-            <div class="img-wrapper">
-              <img id="modalEvidenceImg" src="" alt="Detection Evidence" />
-              <div class="img-fallback" id="modalImgFallback">
-                <div class="crosshair-box"></div>
-                <span>Annotated bounding-box evidence frame</span>
+          <div class="evidence-container">
+            <div class="evidence-label font-mono">ANONYMIZED EVIDENCE FRAME</div>
+            <div class="evidence-image-wrap">
+              <img id="modalEvidenceImg" src="" alt="Defect Evidence" />
+              <div class="evidence-placeholder" id="modalEvidenceFallback">
+                <span>Annotated Bounding Box Evidence</span>
               </div>
             </div>
           </div>
 
-          <!-- Event Metadata -->
-          <div class="modal-meta-grid">
-            <div class="meta-item">
-              <span class="m-label">EVENT TYPE</span>
-              <span class="m-val" id="modalEventType">POTHOLE</span>
+          <div class="details-grid">
+            <div class="detail-item">
+              <span class="detail-label">EVENT TYPE</span>
+              <span class="detail-value" id="modalEventType">POTHOLE</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">AI CONFIDENCE</span>
-              <span class="m-val highlight" id="modalConfidence">91.4%</span>
+            <div class="detail-item">
+              <span class="detail-label">AI CONFIDENCE</span>
+              <span class="detail-value text-blue font-mono" id="modalConfidence">92.4%</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">SOURCE VEHICLE</span>
-              <span class="m-val" id="modalBusId">BUS-101</span>
+            <div class="detail-item">
+              <span class="detail-label">REPORTING VEHICLE</span>
+              <span class="detail-value font-mono" id="modalBusId">BUS-101</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">GPS LOCATION</span>
-              <span class="m-val" id="modalLocation">12.971598, 77.594562</span>
+            <div class="detail-item">
+              <span class="detail-label">GPS COORDINATES</span>
+              <span class="detail-value font-mono" id="modalLocation">12.9716, 77.5946</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">DETECTED TIME</span>
-              <span class="m-val" id="modalTimestamp">10:32:21 AM</span>
+            <div class="detail-item">
+              <span class="detail-label">TIMESTAMP</span>
+              <span class="detail-value font-mono" id="modalTimestamp">Just now</span>
             </div>
-            <div class="meta-item">
-              <span class="m-label">IMU SENSOR FUSION</span>
-              <span class="m-val" id="modalVibration">HIGH VIBRATION BOOST</span>
+            <div class="detail-item">
+              <span class="detail-label">SENSOR FUSION</span>
+              <span class="detail-value font-mono" id="modalVibration">IMU Shock Corroborated</span>
             </div>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" id="modalDismissBtn">Close</button>
+          <button class="btn btn-outline" id="modalDismissBtn">Close</button>
           <button class="btn btn-primary" id="btnCreateWorkOrder">
-            <span>📋 CREATE WORK ORDER</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+            <span>Dispatch Repair Work Order</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Modal: Connect Phone QR / URL -->
+    <!-- Modal: Connect Mobile Sensor with Clean QR Code -->
     <div class="modal-backdrop" id="phoneModal">
-      <div class="modal-card modal-sm">
+      <div class="modal-dialog modal-compact">
         <div class="modal-header">
-          <h2 class="modal-title">CONNECT SMARTPHONE SENSOR</h2>
-          <button class="modal-close" id="phoneModalClose">&times;</button>
-        </div>
-        <div class="modal-body text-center">
-          <p class="phone-inst">Connect your smartphone to the same Wi-Fi or laptop hotspot, then open this URL in your mobile browser:</p>
-          <div class="mobile-url-box">
-            <code id="mobileConnectUrl">http://192.168.1.10:8000/mobile</code>
+          <div>
+            <h3 class="modal-title">Connect Mobile Sensing Unit</h3>
+            <div class="modal-meta">Stream live phone camera & accelerometer telemetry</div>
           </div>
-          <p class="phone-sub">The mobile web app provides live camera, GPS tracking, and accelerometer sensor fusion.</p>
+          <button class="btn-close" id="phoneModalClose">&times;</button>
         </div>
+
+        <div class="modal-body text-center">
+          <p class="modal-instruct">Ensure your phone is on the same Wi-Fi network or mobile hotspot, then scan this QR code or open the link in Chrome / Safari:</p>
+          
+          <div class="qr-container" id="qrCodeContainer">
+            <div class="qr-placeholder">Generating QR...</div>
+          </div>
+
+          <div class="copy-url-group">
+            <input type="text" class="form-input font-mono" id="mobileConnectUrl" readonly value="http://localhost:8000/mobile" />
+            <button class="btn btn-outline btn-sm" id="btnCopyMobileUrl">Copy</button>
+          </div>
+
+          <p class="modal-foot">Provides real-time GPS coordinates, accelerometer bump sensing, and photo uploads to Gartika.</p>
+        </div>
+
         <div class="modal-footer">
-          <button class="btn btn-primary" id="phoneModalOk">Got it</button>
+          <button class="btn btn-primary btn-full" id="phoneModalOk">Done</button>
         </div>
       </div>
     </div>
 
   </div>
 
-  <!-- Leaflet JS -->
+  <!-- Toast Notifications -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Leaflet GIS JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <!-- App JS -->
+  <!-- Application Script -->
   <script src="app.js"></script>
 </body>
 </html>

@@ -90,12 +90,21 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # Check if dashboard dist exists, else fallback to dynamic page
 if settings.DASHBOARD_DIST.exists():
+    @app.api_route("/styles.css", methods=["GET", "HEAD"], include_in_schema=False)
+    def get_root_styles():
+        return FileResponse(settings.DASHBOARD_DIST / "styles.css", media_type="text/css")
+
+    @app.api_route("/app.js", methods=["GET", "HEAD"], include_in_schema=False)
+    def get_root_app_js():
+        return FileResponse(settings.DASHBOARD_DIST / "app.js", media_type="application/javascript")
+
     app.mount("/dashboard", StaticFiles(directory=str(settings.DASHBOARD_DIST), html=True), name="dashboard")
-    @app.get("/", include_in_schema=False)
+    
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root():
         return FileResponse(settings.DASHBOARD_DIST / "index.html")
 else:
-    @app.get("/", include_in_schema=False)
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root():
         return RedirectResponse(url="/docs")
 

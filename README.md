@@ -1,171 +1,222 @@
 # GARTIKA — AI-Powered Mobile Urban Intelligence Platform
 
 > **Sense. Analyze. Predict. Act.**  
-> *Smart India Hackathon 2026 | Problem Statement ID: 26124 — Buses as Urban Sensors*
+> *Smart India Hackathon 2026 | Problem Statement ID: 26124 — Buses as Urban Sensors*  
+> *Team: Tech Priests*
 
 ---
 
-## 1. Overview
+## 1. How Gartika Works
 
-**Gartika** turns moving public-transport vehicles (buses, trams, municipal shuttles) into intelligent, mobile urban sensing units. Instead of relying on expensive static CCTV cameras or delayed manual citizen complaints, buses continuously survey the city's road infrastructure during their routine daily transit routes.
+**Gartika** turns moving public-transport buses and municipal fleets into real-time mobile urban intelligence platforms. Instead of relying on static CCTV cameras with limited field-of-view or delayed citizen complaints, transit buses continuously survey road surface conditions, traffic flows, and hazards along their regular routes.
 
-This working prototype validates the complete end-to-end intelligence loop:
+### The 5-Stage Intelligence Loop
 
 ```text
-SMARTPHONE (Mobile Bus Sensor)
-    ↓ (Camera + GPS + Accelerometer/IMU)
-AI ENGINE (Laptop)
-    ↓ (YOLOv8 Vehicle Detection + ByteTrack + Pothole Defect Detector)
-STRUCTURED GEOTAGGED EVENT
-    ↓ (Event ID, Lat/Lon, Timestamp, Severity, Anonymized Evidence)
-FASTAPI BACKEND & SQLITE DATABASE
-    ↓ (Real-time WebSockets & REST APIs)
-GIS COMMAND DASHBOARD
-    ↓ (Live Bus Tracking, Defect Markers, Traffic Heatmaps)
-ACTION: MAINTENANCE WORK ORDER
+┌────────────────────────┐
+│ 1. SENSE (Smartphone)  │ ➔ Front camera, GPS coordinates & 3-axis accelerometer (IMU)
+└───────────┬────────────┘
+            │ Real-time Telemetry & Frames
+            ▼
+┌────────────────────────┐
+│ 2. ANALYZE (AI Engine) │ ➔ YOLOv8 object detection + ByteTrack vehicle counter + Pothole detector
+└───────────┬────────────┘
+            │ Sensor Fusion (Z-shock vibration + vision bounding box)
+            ▼
+┌────────────────────────┐
+│ 3. STRUCTURE (Backend) │ ➔ Geotagged JSON event with anonymized visual evidence (99.97% bandwidth reduction)
+└───────────┬────────────┘
+            │ Non-blocking WebSocket Broadcast & SQLite Storage
+            ▼
+┌────────────────────────┐
+│ 4. PREDICT & VISUALIZE │ ➔ Minimalist GIS Command Center with real-time bus tracking and defect markers
+└───────────┬────────────┘
+            │ Operator Inspection
+            ▼
+┌────────────────────────┐
+│ 5. ACT (Work Orders)   │ ➔ Instant municipal work order creation and bi-directional status synchronization
+└────────────────────────┘
 ```
 
 ---
 
-## 2. System Architecture
+## 2. End-to-End Architecture
 
 ```text
-┌─────────────────────────────────┐
-│     SMARTPHONE (BUS-101)        │
-│  - Road Camera Preview          │
-│  - Geolocation (Lat/Lon)        │
-│  - IMU Vibration (ax, ay, az)   │
-│  - Web Interface (/mobile)      │
-└───────────────┬─────────────────┘
-                │ Wi-Fi / Hotspot (HTTP & Telemetry)
-                ▼
-┌─────────────────────────────────────────────────────────────┐
-│              LAPTOP URBAN INTELLIGENCE CENTER               │
-│                                                             │
-│  ┌───────────────────────┐       ┌───────────────────────┐  │
-│  │   AI INFERENCE CORE   │       │    FASTAPI BACKEND    │  │
-│  │ - YOLOv8 Vehicle Det. │       │ - REST APIs (/events) │  │
-│  │ - ByteTrack Tracking  │──────▶│ - WebSockets (/ws)    │  │
-│  │ - Pothole Detector    │       │ - Bus Registry        │  │
-│  │ - IMU Sensor Fusion   │       │ - Work Orders Engine  │  │
-│  │ - Deduplication (5s)  │       └───────────┬───────────┘  │
-│  └───────────────────────┘                   │              │
-│                                              ▼              │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                  SQLITE DATABASE                      │  │
-│  │     (buses, events, work_orders, telemetry)          │  │
-│  └───────────────────────────┬───────────────────────────┘  │
-│                              │                              │
-│                              ▼                              │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                GIS COMMAND DASHBOARD                  │  │
-│  │ - Real-time Leaflet Map with Bus Follow Mode          │  │
-│  │ - Road Defect Inspection Drawer & Evidence Viewer     │  │
-│  │ - Instant Work Order Creation (WO-001)                │  │
-│  │ - Bandwidth Savings Display (~0.035 vs 144 GB/day)    │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│             MOBILE SENSING UNIT (BUS-101)              │
+│  - Smartphone mounted on bus windshield                │
+│  - Web App at http://<laptop-ip>:8000/mobile           │
+│  - Features: Live Camera, GPS Telemetry, IMU Shock     │
+└───────────────────────────┬────────────────────────────┘
+                            │ Wi-Fi / Hotspot (HTTP & Telemetry)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│            CENTRAL URBAN INTELLIGENCE HUB              │
+│                                                        │
+│  ┌──────────────────────┐    ┌──────────────────────┐  │
+│  │      AI ENGINE       │    │   FASTAPI BACKEND    │  │
+│  │ - YOLOv8 Traffic Det │    │ - REST APIs          │  │
+│  │ - ByteTrack Tracker  │───▶│ - Real-time WS Stream│  │
+│  │ - Pothole Detector   │    │ - Bus Registry       │  │
+│  │ - IMU Sensor Fusion  │    │ - Work Orders Engine │  │
+│  │ - Deduplication (5s) │    └──────────┬───────────┘  │
+│  └──────────────────────┘               │              │
+│                                         ▼              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │                 SQLITE DATABASE                  │  │
+│  │    (buses, events, work_orders, telemetry)       │  │
+│  └──────────────────────┬───────────────────────────┘  │
+│                         │                              │
+│                         ▼                              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │            GIS COMMAND DASHBOARD                 │  │
+│  │ - Live dark-mode Leaflet map with Bus follow     │  │
+│  │ - Real-time AI event stream & category filters   │  │
+│  │ - Edge Camera preview window                     │  │
+│  │ - Evidence inspection modal with 1-click WO      │  │
+│  │ - Bandwidth savings comparison (99.97% reduction)│  │
+│  └──────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Quick Start (One-Command Launch)
+## 3. How to Use with Mobile (Step-by-Step)
+
+The prototype turns any smartphone into a mobile edge sensing terminal without requiring any app store installation.
+
+### Step 1: Connect Laptop and Phone to the Same Network
+- Connect both your laptop and smartphone to the **same Wi-Fi network**, OR
+- Turn on your laptop's **mobile hotspot** and connect your smartphone to it.
+
+### Step 2: Start the Gartika Platform on Your Laptop
+Run the startup script from the project root:
+```bash
+./scripts/start_demo.sh
+```
+Or start the server directly:
+```bash
+python3 -m backend.app.main
+```
+The terminal will display your local network IP (e.g., `http://192.168.1.15:8000`).
+
+### Step 3: Open the Mobile Sensing Web App on Your Phone
+1. Open Chrome / Safari on your mobile phone.
+2. Navigate to:
+   ```text
+   http://<YOUR-LAPTOP-IP>:8000/mobile
+   ```
+   *(Example: `http://192.168.1.15:8000/mobile`)*
+3. You will see the dark **Gartika Edge Unit** sensing terminal.
+
+### Step 4: Operate Mobile Sensing
+- **Device ID:** Set to `BUS-101` (or custom bus number).
+- **Tap `[ ⚡ START SENSING ]`:**
+  - The phone starts capturing camera frames and telemetry.
+  - GPS coordinates and speed update in real time.
+- **Indoor / Simulation Controls:**
+  - **Simulate Route GPS:** If testing indoors or without live GPS lock, tap `[ 📍 SIMULATE ROUTE GPS ]` to smoothly traverse the Bangalore transit corridor.
+  - **Trigger Road Bump:** Tap `[ 💥 TRIGGER ROAD BUMP ]` to simulate hitting a pothole with the accelerometer (Z-axis shock `16.8 m/s²`).
+- **Dashboard Synchronization:**
+  - Look at your laptop screen on `http://localhost:8000` — the bus marker will move live on the map, telemetry updates every 2 seconds, and live camera frames appear in the preview box.
+
+---
+
+## 4. Quick Start for Presentation & Evaluation
 
 ### Prerequisites
 - **Python:** 3.10+
-- **Browser:** Chrome, Firefox, Safari, or Edge
+- **Browser:** Google Chrome, Firefox, Edge, or Safari
 
-### 1-Step Startup
-Run the unified demo script from the project root:
-
+### Single-Command Launch
 ```bash
 ./scripts/start_demo.sh
 ```
 
-This single command automatically:
-1. Initializes and seeds the SQLite database with realistic events and route waypoints.
-2. Synthesizes a demo road video if not already present.
-3. Launches the **FastAPI Backend Server** on `http://0.0.0.0:8000`.
-4. Serves the **GIS Command Center** on `http://localhost:8000`.
-5. Launches the **AI Ingestion Engine** processing the road video and detecting vehicles/potholes.
-6. Prints your laptop's Wi-Fi IP for connecting your phone.
-
----
-
-## 4. Connecting Your Smartphone (Live Sensing Mode)
-
-1. Connect your smartphone to the **same Wi-Fi network** or to your laptop's **mobile hotspot**.
-2. Open your smartphone browser and navigate to:
-   ```text
-   http://<YOUR-LAPTOP-IP>:8000/mobile
-   ```
-   *(The exact IP is printed on the terminal when starting the demo, e.g., `http://192.168.1.15:8000/mobile`)*
-3. On the **Gartika Edge Unit** mobile page:
-   - Verify device ID is set to `BUS-101`.
-   - Tap **START SENSING**.
-   - Grant Camera and GPS permissions (or tap **SIMULATE ROUTE GPS** for indoor testing).
-   - Tap **TRIGGER ROAD BUMP** to test physical vibration sensor fusion!
-
----
-
-## 5. End-to-End Demo Script & Presentation Story
-
-| Step | Action | What You See on Screen |
+### URLs at a Glance
+| Interface | URL | Purpose |
 |---|---|---|
-| **1** | Open `http://localhost:8000` | **Gartika Command Center** opens with live metrics, dark GIS map, and Bus card. |
-| **2** | Start Sensing on Phone / AI Video | `BUS-101` status switches to **ACTIVE (ONLINE)** and moves smoothly along the corridor. |
-| **3** | AI Vehicle Detection & Tracking | AI identifies cars, buses, and bikes, assigning persistent **ByteTrack IDs** (`CAR #1`, `BUS #2`). |
-| **4** | Road Defect Detection | AI identifies a pothole, calculates confidence (**91.4%**), and combines IMU vibration. |
-| **5** | Event Geotagging & Transmission | Structured event is emitted to backend. Red marker 🔴 appears in real-time on GIS Map. |
-| **6** | Event Inspection | Click the pothole marker or feed card to open the **Evidence Modal** with privacy-blurred snapshot. |
-| **7** | Create Work Order | Click **`[ CREATE WORK ORDER ]`**. Maintenance ticket `WO-101` is instantly dispatched to BBMP road cells. |
+| **GIS Command Center** | `http://localhost:8000` | Full urban intelligence dashboard |
+| **Mobile Sensing Unit** | `http://<laptop-ip>:8000/mobile` | Smartphone camera & sensor terminal |
+| **Interactive API Docs** | `http://localhost:8000/docs` | Swagger OpenAPI backend testbed |
+| **Health Check** | `http://localhost:8000/health` | Backend and subsystem status |
 
 ---
 
-## 6. Key Features & Innovation Highlights
+## 5. Live Presentation Walkthrough Script
 
-### A. Dual Sensing Pipeline
-- **Pipeline A (Traffic & Vehicles):** YOLOv8 detects urban transport classes (`car`, `bus`, `truck`, `motorcycle`, `bicycle`, `person`). ByteTrack prevents duplicate counting.
-- **Pipeline B (Road Defects):** Pothole and surface crack detector with multi-modal IMU vibration fusion (Z-axis acceleration bump boosts confidence from 0.82 to 0.94).
+| Step | Action | Observed Result on Screen |
+|---|---|---|
+| **1** | Open `http://localhost:8000` | **Gartika Command Center** displays active fleet summary, dark GIS map, and metrics. |
+| **2** | Start Sensing on Phone | Bus status switches to **ACTIVE**, and real-time speed & coordinates update. |
+| **3** | AI Detection in Action | Detections appear live in the **Real-Time Event Feed** via WebSockets with confidence scores. |
+| **4** | Defect Inspection | Click on any Pothole event card or map pin to open the **Evidence Modal** showing the localized bounding-box frame and IMU vibration fusion. |
+| **5** | Work Order Dispatch | Click **`[ 📋 DISPATCH WORK ORDER ]`** to instantly generate maintenance ticket `WO-XXXX`. Status is synced across all clients. |
+| **6** | Bandwidth Proof | Point to the **Bandwidth Comparison Panel** demonstrating **99.97% transmission reduction** (~0.035 GB vs 144 GB/day) due to edge processing. |
 
-### B. Intelligent Event Deduplication
-- Prevents generating hundreds of duplicate alerts for the same defect across consecutive frames using a **5-second temporal cooldown** and **20-meter spatial Haversine radius**.
+---
 
-### C. Bandwidth Reduction (Edge vs Cloud)
-- **Continuous Raw Video:** `~144 GB / bus / day`
-- **Gartika Structured Events:** `~0.035 GB / bus / day`
-- **Bandwidth Reduction:** **99.97%** *(Design Estimate)*
+## 6. Key Innovations & Technical Highlights
 
-### D. Privacy-by-Design
-- Local frame anonymization: Automatic Gaussian blurring of detected persons and license plates before evidence crops are stored.
+### 1. Dual AI Sensing Pipeline
+- **Traffic & Vehicle Counting:** YOLOv8 detects urban transport classes (`car`, `bus`, `truck`, `motorcycle`, `bicycle`). Integrated **ByteTrack** ensures persistent ID tracking across frames to avoid double-counting.
+- **Road Defect Detection:** Vision-based pothole and crack classification boosted by multi-modal IMU accelerometer fusion.
+
+### 2. Spatial & Temporal Deduplication
+- Prevents redundant alerts when a vehicle slows down or stops over a defect using a **5-second temporal cooldown** and a **20-meter spatial Haversine threshold**.
+
+### 3. Privacy-by-Design
+- Local frame anonymization: Automatic blurring of human faces and vehicle license plates before evidence crops are stored.
+
+### 4. Edge vs Cloud Bandwidth Optimization
+- **Continuous Raw Video:** `~144 GB / vehicle / day`
+- **Gartika Edge Telemetry:** `~0.035 GB / vehicle / day`
+- **Reduction:** **99.97%** data savings, allowing scale to thousands of buses over 4G/5G cellular.
 
 ---
 
 ## 7. Individual Service Commands (Manual Run)
 
-If you wish to run services individually in separate terminals:
-
-### Terminal 1: Backend & Dashboard
+### Backend & Command Center
 ```bash
-# Activate your python environment
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Terminal 2: AI Video Processor
+### AI Video Processing Engine
 ```bash
-# Run AI engine on demo video
+# Run on demo road video
 python3 ai/video_processor.py --source demo --bus-id BUS-101
 
-# Or run with visual OpenCV GUI display
-python3 ai/video_processor.py --source demo --display
-
-# Or run on connected webcam
+# Run on connected webcam
 python3 ai/video_processor.py --source 0
+
+# Run with visual OpenCV preview window
+python3 ai/video_processor.py --source demo --display
 ```
 
-### Seed Demo Data Anytime
+### Seed Synthetic Demo Dataset
 ```bash
 python3 scripts/seed_demo_data.py
+```
+
+### Reset to Clean Real-Time Live State
+```bash
+python3 scripts/reset_to_live.py
+```
+
+### Run Edge Ingestion / Webcam Streamer
+```bash
+# Ingest live USB webcam or built-in camera to backend with real-time inference
+python3 scripts/run_webcam_edge.py --camera 0
+
+# Stream dashcam video file as live edge input
+python3 scripts/run_webcam_edge.py --video path/to/dashcam.mp4
+```
+
+### Run Full Test Suite
+```bash
+pytest tests/
 ```
 
 ---
@@ -174,51 +225,49 @@ python3 scripts/seed_demo_data.py
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | System status, edge connectivity, local IP |
-| `GET` | `/stats` | Fleet summary, defect count, bandwidth metrics |
-| `POST` | `/events` | Ingest AI detected event |
-| `GET` | `/events` | Retrieve list of events (filter by type/severity) |
-| `GET` | `/events/{event_id}` | Retrieve specific event details |
+| `GET` | `/health` | Subsystem status, DB connection, local IP |
+| `GET` | `/stats` | Fleet summary, road defects, vehicle totals, bandwidth |
+| `POST` | `/events` | Ingest AI detection event (geotagged) |
+| `GET` | `/events` | Filter events by type, severity, confidence, or bus |
+| `GET` | `/events/{id}` | Retrieve individual event details |
+| `PATCH`| `/events/{id}` | Update event status / severity |
 | `POST` | `/telemetry` | Ingest GPS & IMU vibration telemetry from phone |
-| `GET` | `/buses` | Retrieve active buses and coordinates |
-| `POST` | `/work-orders` | Dispatch maintenance work order from event |
-| `GET` | `/work-orders` | Retrieve list of open/assigned work orders |
-| `WS` | `/ws/events` | Real-time WebSocket event stream |
+| `GET` | `/buses` | Retrieve active buses and telemetry positions |
+| `POST` | `/stream/frame` | Upload live camera frame from mobile unit (triggers CV detection) |
+| `GET` | `/stream/latest-frame`| Retrieve latest JPEG frame for live stream preview |
+| `POST` | `/work-orders` | Dispatch maintenance work order from detection event |
+| `GET` | `/work-orders` | Retrieve list of maintenance work orders |
+| `PATCH`| `/work-orders/{id}` | Update work order status (`OPEN`, `ASSIGNED`, `IN PROGRESS`, `RESOLVED`) |
+| `WS` | `/ws/events` | High-speed real-time WebSocket event stream |
 
 ---
 
-## 9. Future Production Architecture
+## 9. Production Hardware Scaling Roadmap
 
-While this prototype uses a smartphone and laptop for agile demonstration, the production hardware roadmap scales to:
+While this prototype uses a smartphone and laptop for demonstration, the production hardware roadmap transitions to:
 
 ```text
-Raspberry Pi 5 (8GB RAM)
-       +
-Hailo-8 M.2 AI Accelerator (26 TOPS)
-       +
-4x Sony IMX HDR Cameras (Front, Left, Right, Road-Facing)
-       +
-Industrial Multi-constellation GNSS (GPS/NavIC) + 6-Axis IMU
-       +
-Automotive DC-DC Power & Supercapacitor UPS
-       +
-Industrial 4G/5G Cellular Gateway (MQTT over TLS)
+Raspberry Pi 5 (8GB) + Hailo-8 M.2 AI Accelerator (26 TOPS)
+       ├── 4x Sony IMX HDR Cameras (Front, Left, Right, Road Surface)
+       ├── Industrial Multi-constellation GNSS (GPS / NavIC) + 6-Axis IMU
+       ├── Automotive DC-DC Power & Supercapacitor Backup UPS
+       └── Industrial 4G/5G Cellular Gateway (MQTT over TLS)
 ```
-
-The core architecture remains identical:
-**Edge AI Detection ➔ Structured Telemetry ➔ Central Municipal Intelligence ➔ Immediate Corrective Action.**
 
 ---
 
-## 10. Troubleshooting
+## 10. Troubleshooting & Utilities
 
-- **Mobile Camera Not Opening in Browser:**
-  Modern mobile browsers require HTTPS for camera permissions on external IPs. If testing over plain HTTP on Wi-Fi, the app automatically enables the **Synthetic Stream Fallback** and **Simulate Route GPS**, allowing 100% of the demo features to work smoothly.
+- **Mobile Camera Permissions on HTTP:**
+  Mobile browsers restrict continuous `getUserMedia()` camera streams to HTTPS on non-localhost IPs. The mobile terminal provides both native file snapshot capture (`Take Snapshot Frame`) and **Simulate Route GPS** & **Trigger Road Bump** tools, ensuring 100% of features work seamlessly on any device.
 - **Port 8000 Already in Use:**
   Set `BACKEND_PORT=8080` in `.env` or run `uvicorn backend.app.main:app --port 8080`.
-- **Resetting Demo Data:**
-  Simply execute `python3 scripts/seed_demo_data.py`.
+- **Reset to Clean Live State (Zero Mock Data):**
+  Run `python3 scripts/reset_to_live.py`.
+- **Seed Synthetic Demo Dataset (Optional):**
+  Run `python3 scripts/seed_demo_data.py`.
 
 ---
 
 *Developed for Smart India Hackathon 2026 by Team Tech Priests.*
+
