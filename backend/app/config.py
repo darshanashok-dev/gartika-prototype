@@ -58,10 +58,18 @@ class Settings:
             return ["*"]
         return [origin.strip() for origin in self.CORS_ORIGINS_RAW.split(",") if origin.strip()]
 
-    # AI & Sensor Fusion
-    CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.45"))
-    MODEL_PATH: Path = BASE_DIR / os.getenv("MODEL_PATH", "models/gartika_road_defect.pt")
-    ONNX_MODEL_PATH: Path = BASE_DIR / os.getenv("ONNX_MODEL_PATH", "models/gartika_road_defect.onnx")
+    # AI & Sensor Fusion Canonical Settings
+    GARTIKA_MODEL_PATH: Path = BASE_DIR / os.getenv("GARTIKA_MODEL_PATH", "models/gartika_road_defect.pt")
+    GARTIKA_MODEL_ONNX_PATH: Path = BASE_DIR / os.getenv("GARTIKA_MODEL_ONNX_PATH", "models/gartika_road_defect.onnx")
+    GARTIKA_MODEL_VERSION: str = os.getenv("GARTIKA_MODEL_VERSION", "v1.1.0-yolov8n")
+    GARTIKA_MODEL_CONFIDENCE: float = float(os.getenv("GARTIKA_MODEL_CONFIDENCE", "0.45"))
+    GARTIKA_MODEL_IOU: float = float(os.getenv("GARTIKA_MODEL_IOU", "0.45"))
+    GARTIKA_MODEL_IMAGE_SIZE: int = int(os.getenv("GARTIKA_MODEL_IMAGE_SIZE", "640"))
+
+    # Backward compatibility aliases
+    CONFIDENCE_THRESHOLD: float = GARTIKA_MODEL_CONFIDENCE
+    MODEL_PATH: Path = GARTIKA_MODEL_PATH
+    ONNX_MODEL_PATH: Path = GARTIKA_MODEL_ONNX_PATH
     FUSION_TEMPORAL_WINDOW_MS: int = int(os.getenv("FUSION_TEMPORAL_WINDOW_MS", "500"))
     SPATIAL_DEDUP_METERS: float = float(os.getenv("SPATIAL_DEDUP_METERS", "15.0"))
     SPATIAL_DEDUP_WINDOW_SECONDS: int = int(os.getenv("SPATIAL_DEDUP_WINDOW_SECONDS", "300"))

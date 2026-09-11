@@ -104,27 +104,33 @@ class PotholeDetector:
                         cls_id = int(box.cls[0])
                         cls_name = self.model.names.get(cls_id, "POTHOLE").upper()
 
-                        # IMU vibration boost
+                        # IMU vibration score tracking (separate from raw visual model confidence)
                         vibration_boost = 0.0
                         vibration_level = "NORMAL"
+                        imu_score = None
                         if imu_data:
                             az = abs(imu_data.get("az", 9.81) - 9.81)
                             total_accel = abs(imu_data.get("ax", 0.0)) + abs(imu_data.get("ay", 0.0)) + az
                             if total_accel > 3.0:
                                 vibration_boost = 0.15
                                 vibration_level = "HIGH"
+                                imu_score = round(min(0.95, 0.50 + total_accel * 0.08), 2)
                             elif total_accel > 1.5:
                                 vibration_boost = 0.07
                                 vibration_level = "MEDIUM"
+                                imu_score = round(min(0.75, 0.35 + total_accel * 0.08), 2)
 
-                        final_conf = min(0.99, conf + vibration_boost)
-                        severity = "HIGH" if (final_conf > 0.85 or vibration_level == "HIGH") else ("MEDIUM" if final_conf > 0.70 else "LOW")
+                        # Final fused score combines visual candidate and physical IMU excitation
+                        fusion_score = min(0.99, round(conf + vibration_boost, 2))
+                        severity = "HIGH" if (fusion_score > 0.85 or vibration_level == "HIGH") else ("MEDIUM" if fusion_score > 0.70 else "LOW")
 
                         defects.append({
                             "bbox": [int(x1), int(y1), int(x2), int(y2)],
                             "event_type": cls_name,
-                            "confidence": round(float(final_conf), 2),
+                            "confidence": round(float(fusion_score), 2),
                             "model_confidence": round(float(conf), 2),
+                            "imu_score": imu_score,
+                            "fusion_score": round(float(fusion_score), 2),
                             "heuristic_score": None,
                             "source": "yolo",
                             "verified": False,

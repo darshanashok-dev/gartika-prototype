@@ -3,8 +3,8 @@
 evaluate_metrics.py - Gartika AI & Sensor Fusion Performance Evaluation Script.
 
 Evaluates precision, recall, F1 score, mean Average Precision (mAP),
-false positive rate per 100km, sensor fusion corroboration elevation rates,
-and processing latency across datasets.
+per-class metrics, small/medium object recall, and latency across actual validation
+and test datasets using real YOLOv8 model inference.
 """
 
 import sys
@@ -14,91 +14,175 @@ import time
 import argparse
 from pathlib import Path
 from typing import Dict, List, Any
+import cv2
+import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
-def calculate_metrics(
-    total_ground_truth_potholes: int = 150,
-    true_positives: int = 138,
-    false_positives: int = 9,
-    false_negatives: int = 12,
-    simulated_survey_km: float = 250.0,
-    single_bus_detections: int = 147,
-    multi_bus_verified: int = 132,
-    avg_inference_latency_ms: float = 24.5,
-    avg_fusion_latency_ms: float = 1.8
-) -> Dict[str, Any]:
+MODEL_PATH = BASE_DIR / "models" / "gartika_road_defect.pt"
+DATA_YAML = BASE_DIR / "dataset" / "data.yaml"
+
+def run_real_evaluation(conf_threshold: float = 0.45) -> Dict[str, Any]:
     """
-    Compute rigorous perception and sensor fusion metrics.
+    Compute rigorous perception and sensor fusion metrics directly from real model inference.
     """
-    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
-    recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0.0
-    f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    from ultralytics import YOLO
     
-    # False positive rate per 100 km surveyed
-    fp_rate_per_100km = (false_positives / simulated_survey_km) * 100.0 if simulated_survey_km > 0 else 0.0
+    if not MODEL_PATH.exists():
+        print(f"[ERROR] Model not found at {MODEL_PATH}", file=sys.stderr)
+        sys.exit(1)
+
+    model = YOLO(str(MODEL_PATH))
     
-    # Multi-bus corroboration elevation rate
-    corroboration_rate = (multi_bus_verified / single_bus_detections) * 100.0 if single_bus_detections > 0 else 0.0
+    # 1. Ultralytics validation run
+    val_res = model.val(data=str(DATA_YAML), split="val", plots=False, verbose=False)
+    test_res = model.val(data=str(DATA_YAML), split="test", plots=False, verbose=False)
+    
+    val_p = float(val_res.results_dict.get("metrics/precision(B)", 0.0))
+    val_r = float(val_res.results_dict.get("metrics/recall(B)", 0.0))
+    val_map50 = float(val_res.results_dict.get("metrics/mAP50(B)", 0.0))
+    val_map50_95 = float(val_res.results_dict.get("metrics/mAP50-95(B)", 0.0))
+    val_f1 = float(2 * val_p * val_r / (val_p + val_r)) if (val_p + val_r) > 0 else 0.0
+
+    test_p = float(test_res.results_dict.get("metrics/precision(B)", 0.0))
+    test_r = float(test_res.results_dict.get("metrics/recall(B)", 0.0))
+    test_map50 = float(test_res.results_dict.get("metrics/mAP50(B)", 0.0))
+    test_map50_95 = float(test_res.results_dict.get("metrics/mAP50-95(B)", 0.0))
+    test_f1 = float(2 * test_p * test_r / (test_p + test_r)) if (test_p + test_r) > 0 else 0.0
+
+    # 2. Benchmark latency and small/medium object recall on test set
+    test_imgs = sorted((BASE_DIR / "dataset" / "images" / "test").glob("*.jpg"))
+    latencies = []
+    tp, fp, fn = 0, 0, 0
+    size_tp = {"small": 0, "medium": 0, "large": 0}
+    size_total = {"small": 0, "medium": 0, "large": 0}
+
+    for img_p in test_imgs:
+        lbl_p = (BASE_DIR / "dataset" / "labels" / "test" / f"{img_p.stem}.txt")
+        gt_boxes = []
+        if lbl_p.exists():
+            for line in lbl_p.read_text().splitlines():
+                if line.strip():
+                    c, x, y, w, h = map(float, line.split())
+                    gt_boxes.append((int(c), x, y, w, h))
+                    area = w * h
+                    if area < 0.01: size_total["small"] += 1
+                    elif area < 0.10: size_total["medium"] += 1
+                    else: size_total["large"] += 1
+        
+        img = cv2.imread(str(img_p))
+        ih, iw = img.shape[:2]
+        
+        t0 = time.time()
+        res = model.predict(img, conf=conf_threshold, verbose=False)[0]
+        latencies.append((time.time() - t0) * 1000.0)
+        
+        pred_boxes = []
+        for box in res.boxes:
+            c = int(box.cls[0].item())
+            bx1, by1, bx2, by2 = box.xyxy[0].cpu().numpy()
+            bw = (bx2 - bx1) / iw
+            bh = (by2 - by1) / ih
+            bx = (bx1 + bx2) / (2 * iw)
+            by = (by1 + by2) / (2 * ih)
+            pred_boxes.append((c, bx, by, bw, bh))
+
+        matched_gt = set()
+        for p in pred_boxes:
+            pc, px, py, pw, ph = p
+            best_iou, best_idx = 0.0, -1
+            for g_idx, g in enumerate(gt_boxes):
+                if g_idx in matched_gt: continue
+                gc, gx, gy, gw, gh = g
+                if pc != gc: continue
+                xA = max(px - pw/2, gx - gw/2)
+                yA = max(py - ph/2, gy - gh/2)
+                xB = min(px + pw/2, gx + gw/2)
+                yB = min(py + ph/2, gy + gh/2)
+                inter = max(0, xB - xA) * max(0, yB - yA)
+                union = pw*ph + gw*gh - inter
+                iou = inter / max(1e-5, union)
+                if iou > best_iou:
+                    best_iou, best_idx = iou, g_idx
+
+            if best_iou >= 0.45:
+                tp += 1
+                matched_gt.add(best_idx)
+                gc, gx, gy, gw, gh = gt_boxes[best_idx]
+                area = gw * gh
+                if area < 0.01: size_tp["small"] += 1
+                elif area < 0.10: size_tp["medium"] += 1
+                else: size_tp["large"] += 1
+            else:
+                fp += 1
+
+        fn += len(gt_boxes) - len(matched_gt)
+
+    avg_latency = float(np.mean(latencies)) if latencies else 0.0
+    small_recall = size_tp["small"] / max(1, size_total["small"])
+    med_recall = size_tp["medium"] / max(1, size_total["medium"])
 
     return {
-        "evaluation_summary": {
-            "total_ground_truth_potholes": total_ground_truth_potholes,
-            "simulated_survey_km": simulated_survey_km,
-            "true_positives": true_positives,
-            "false_positives": false_positives,
-            "false_negatives": false_negatives
+        "model": str(MODEL_PATH.name),
+        "confidence_threshold": conf_threshold,
+        "validation_metrics": {
+            "precision": round(val_p, 4),
+            "recall": round(val_r, 4),
+            "f1_score": round(val_f1, 4),
+            "mAP50": round(val_map50, 4),
+            "mAP50_95": round(val_map50_95, 4)
         },
-        "performance_metrics": {
-            "precision": round(precision, 4),
-            "precision_percent": round(precision * 100.0, 2),
-            "recall": round(recall, 4),
-            "recall_percent": round(recall * 100.0, 2),
-            "f1_score": round(f1_score, 4),
-            "false_positives_per_100km": round(fp_rate_per_100km, 2),
-            "corroboration_elevation_rate_percent": round(corroboration_rate, 2)
+        "test_metrics": {
+            "precision": round(test_p, 4),
+            "recall": round(test_r, 4),
+            "f1_score": round(test_f1, 4),
+            "mAP50": round(test_map50, 4),
+            "mAP50_95": round(test_map50_95, 4),
+            "true_positives": tp,
+            "false_positives": fp,
+            "false_negatives": fn,
+            "small_defect_recall": round(small_recall, 4),
+            "medium_defect_recall": round(med_recall, 4)
         },
-        "latency_benchmarks_ms": {
-            "edge_cv_inference_latency_ms": round(avg_inference_latency_ms, 2),
-            "sensor_fusion_alignment_latency_ms": round(avg_fusion_latency_ms, 2),
-            "total_pipeline_latency_ms": round(avg_inference_latency_ms + avg_fusion_latency_ms, 2),
-            "achieved_edge_throughput_fps": round(1000.0 / (avg_inference_latency_ms + avg_fusion_latency_ms), 1)
+        "benchmarks": {
+            "avg_inference_latency_ms": round(avg_latency, 2),
+            "fps": round(1000.0 / max(0.1, avg_latency), 1)
         }
     }
 
 def print_metrics_table(res: Dict[str, Any]):
-    summary = res["evaluation_summary"]
-    metrics = res["performance_metrics"]
-    latency = res["latency_benchmarks_ms"]
+    val = res["validation_metrics"]
+    test = res["test_metrics"]
+    bench = res["benchmarks"]
 
     print("=" * 76)
-    print("      GARTIKA URBAN AI & SENSOR FUSION EVALUATION REPORT      ")
+    print("      GARTIKA URBAN ROAD DEFECT DETECTION EVALUATION REPORT      ")
     print("=" * 76)
-    print(f"Total Ground Truth Hazards: {summary['total_ground_truth_potholes']} | Survey Route Distance: {summary['simulated_survey_km']} km")
-    print(f"True Positives: {summary['true_positives']} | False Positives: {summary['false_positives']} | False Negatives: {summary['false_negatives']}\n")
-
+    print(f"Model: {res['model']} | Confidence Threshold: {res['confidence_threshold']}")
+    print(f"Test Set Counts: TP={test['true_positives']} | FP={test['false_positives']} | FN={test['false_negatives']}")
     print("-" * 76)
-    print(f"{'Metric':<40} | {'Score / Value':<30}")
+    print(f"{'Metric':<40} | {'Validation':<15} | {'Test (Held-Out)':<15}")
     print("-" * 76)
-    print(f"{'Precision (Visual + IMU Fusion)':<40} | {metrics['precision_percent']:>8.2f}% ({metrics['precision']:.4f})")
-    print(f"{'Recall (Defect Coverage)':<40} | {metrics['recall_percent']:>8.2f}% ({metrics['recall']:.4f})")
-    print(f"{'F1 Score (Balanced Accuracy)':<40} | {metrics['f1_score']:>10.4f}")
-    print(f"{'False Positive Rate per 100 km':<40} | {metrics['false_positives_per_100km']:>8.2f} false alerts / 100 km")
-    print(f"{'Multi-Bus Corroboration Rate':<40} | {metrics['corroboration_elevation_rate_percent']:>8.2f}%")
+    print(f"{'Precision':<40} | {val['precision']*100:>13.2f}% | {test['precision']*100:>13.2f}%")
+    print(f"{'Recall':<40} | {val['recall']*100:>13.2f}% | {test['recall']*100:>13.2f}%")
+    print(f"{'F1 Score':<40} | {val['f1_score']:>14.4f} | {test['f1_score']:>14.4f}")
+    print(f"{'mAP@0.50':<40} | {val['mAP50']*100:>13.2f}% | {test['mAP50']*100:>13.2f}%")
+    print(f"{'mAP@0.50:0.95':<40} | {val['mAP50_95']*100:>13.2f}% | {test['mAP50_95']*100:>13.2f}%")
     print("-" * 76)
-    print(f"{'Edge CV Model Inference Latency':<40} | {latency['edge_cv_inference_latency_ms']:>8.2f} ms")
-    print(f"{'Sensor Fusion Buffer Alignment Latency':<40} | {latency['sensor_fusion_alignment_latency_ms']:>8.2f} ms")
-    print(f"{'Total End-to-End Processing Latency':<40} | {latency['total_pipeline_latency_ms']:>8.2f} ms")
-    print(f"{'Achieved Real-Time Throughput':<40} | {latency['achieved_edge_throughput_fps']:>8.1f} FPS")
+    print(f"{'Small Defect Recall (<0.01 area)':<40} | {'-':<15} | {test['small_defect_recall']*100:>13.2f}%")
+    print(f"{'Medium Defect Recall (0.01-0.10 area)':<40} | {'-':<15} | {test['medium_defect_recall']*100:>13.2f}%")
+    print(f"{'Average CPU Inference Latency':<40} | {'-':<15} | {bench['avg_inference_latency_ms']:>10.2f} ms")
+    print(f"{'Processing Throughput':<40} | {'-':<15} | {bench['fps']:>11.1f} FPS")
     print("=" * 76)
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate Gartika AI & Sensor Fusion Metrics.")
+    parser = argparse.ArgumentParser(description="Evaluate Gartika AI Detection Metrics.")
+    parser.add_argument("--conf", type=float, default=0.45, help="Confidence threshold")
     parser.add_argument("--json", action="store_true", help="Output metrics as JSON")
     args = parser.parse_args()
 
-    results = calculate_metrics()
+    results = run_real_evaluation(conf_threshold=args.conf)
     if args.json:
         print(json.dumps(results, indent=2))
     else:
@@ -106,3 +190,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
