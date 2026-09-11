@@ -145,6 +145,7 @@ def get_stats(db: Session = Depends(get_db)):
         "repairs_verified_count": repairs_verified,
         "repairs_pending_verification": repairs_pending,
         "telemetry_points": telemetry_count,
+        "local_ip": settings.LOCAL_IP,
         "bandwidth_comparison": {
             "label": "GARTIKA EDGE VS CLOUD STREAMING",
             "raw_video_gb_per_day": 144.0,

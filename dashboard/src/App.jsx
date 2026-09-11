@@ -50,7 +50,10 @@ export function App() {
 
       setBackendHealthy(Boolean(healthRes));
       if (statsRes) {
-        setStats(statsRes);
+        setStats({
+          ...statsRes,
+          local_ip: healthRes?.local_ip || statsRes?.local_ip || (typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1')
+        });
         if (statsRes.demo_mode !== undefined) setIsDemoMode(statsRes.demo_mode);
       }
       if (Array.isArray(eventsRes)) setEvents(eventsRes);
