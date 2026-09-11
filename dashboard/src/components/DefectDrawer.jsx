@@ -130,6 +130,44 @@ export function DefectDrawer({
           )}
         </div>
 
+        {/* Sensor Traceability Pipeline (Defect -> Bus -> Frame -> GPS -> IMU -> Fusion -> Verification) */}
+        <div className="bg-zinc-950/80 p-3 rounded border border-zinc-800 space-y-2 font-mono text-[11px]">
+          <div className="text-[10px] text-zinc-400 uppercase flex items-center justify-between border-b border-zinc-800 pb-1">
+            <span className="flex items-center gap-1 text-amber-400 font-bold">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              SENSOR TRACEABILITY CHAIN
+            </span>
+            <span className="text-zinc-500">Multimodal Fusion</span>
+          </div>
+
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between text-zinc-300">
+              <span className="text-zinc-500">1. Mobile Sensing Unit:</span>
+              <span className="font-bold text-zinc-200">{defect.bus_id || 'BUS-101'}</span>
+            </div>
+            <div className="flex items-center justify-between text-zinc-300">
+              <span className="text-zinc-500">2. Optical Shutter:</span>
+              <span className="text-emerald-400 font-bold">{evidenceUrl ? 'Frame Captured (JPEG)' : 'Frame Sync'}</span>
+            </div>
+            <div className="flex items-center justify-between text-zinc-300">
+              <span className="text-zinc-500">3. GNSS Telemetry:</span>
+              <span className={hasGps ? 'text-emerald-400 font-bold' : 'text-rose-400'}>
+                {hasGps ? `${defect.latitude.toFixed(4)}, ${defect.longitude.toFixed(4)}` : 'Awaiting Lock'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-zinc-300">
+              <span className="text-zinc-500">4. IMU Shock Alignment:</span>
+              <span className="text-amber-400 font-bold">
+                {defect.vibration_level ? `${defect.vibration_level} (Δz shock)` : 'Normal Baseline'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-zinc-300">
+              <span className="text-zinc-500">5. Multi-Bus Corroboration:</span>
+              <span className="text-sky-400 font-bold">{defect.unique_bus_count || 1} Transit Bus(es)</span>
+            </div>
+          </div>
+        </div>
+
         {/* Multimodal Confidence Breakdown */}
         <div className="bg-zinc-950/60 p-3 rounded border border-zinc-800 space-y-2">
           <div className="text-[10px] text-zinc-400 font-mono uppercase flex items-center gap-1.5 border-b border-zinc-800 pb-1">

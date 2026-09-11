@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Gartika Mobile Edge Unit — Urban Sensing Terminal</title>
+  <title>Gartika Mobile Edge — Transit Sensing Terminal</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,40 +17,40 @@
       <div class="logo-group">
         <div class="brand-badge font-mono">SIH 2026 • BUS EDGE SENSING</div>
         <h1 class="title">GARTIKA EDGE UNIT</h1>
-        <p class="subtitle">Mobile Transit Intelligence Terminal</p>
+        <p class="subtitle">Mobile Transit Road-Sensing Terminal</p>
       </div>
       <div class="device-tag">
-        <span class="label">BUS ID:</span>
+        <span class="label font-mono">BUS ID:</span>
         <input type="text" id="busIdInput" value="BUS-101" spellcheck="false" class="font-mono" />
       </div>
     </header>
 
-    <!-- Large Operational Status Indicator Banner -->
+    <!-- Operational Status Indicator Banner -->
     <div class="sensing-status-banner standby" id="sensingBanner">
       <div class="status-indicator-dot" id="bannerDot"></div>
       <div class="status-text-group">
         <span class="status-state font-mono" id="bannerStateText">STANDBY</span>
-        <span class="status-sub" id="bannerInstruction">Tap 'Start Live Sensing' to activate camera, IMU & GPS</span>
+        <span class="status-sub" id="bannerInstruction">Mount phone firmly on windshield. Tap 'Start Sensing' to begin.</span>
       </div>
     </div>
 
-    <!-- Hardware & Connection Status Grid -->
+    <!-- Hardware Subsystem Status Grid -->
     <div class="status-grid">
       <div class="status-pill" id="camStatus">
         <span class="dot"></span>
-        <span class="text">CAMERA</span>
+        <span class="text">CAM: <strong id="camStatusText">READY</strong></span>
       </div>
       <div class="status-pill" id="gpsStatus">
         <span class="dot"></span>
-        <span class="text">GPS LOCK</span>
+        <span class="text">GPS: <strong id="gpsStatusText">SEARCHING</strong></span>
       </div>
       <div class="status-pill" id="imuStatus">
         <span class="dot"></span>
-        <span class="text">IMU CAL</span>
+        <span class="text">IMU: <strong id="imuStatusText">INIT</strong></span>
       </div>
       <div class="status-pill" id="netStatus">
         <span class="dot"></span>
-        <span class="text">BACKEND WS</span>
+        <span class="text">NET: <strong id="netStatusText">ONLINE</strong></span>
       </div>
     </div>
 
@@ -65,8 +65,11 @@
         <div class="hud-corner bottom-right"></div>
         
         <div class="hud-telemetry-overlay font-mono">
-          <div class="flex items-center gap-1.5"><span class="rec-dot" id="recDot"></span> INGEST: <span id="ingestMode">STANDBY</span></div>
-          <div>PACKETS: <span id="hudPackets">0</span> | FPS: <span id="hudFps">15.0</span></div>
+          <div class="flex items-center gap-1.5">
+            <span class="rec-dot" id="recDot"></span>
+            INGEST: <span id="ingestMode">STANDBY</span>
+          </div>
+          <div>LATENCY: <span id="hudPing">--</span> | FPS: <span id="hudFps">15.0</span></div>
         </div>
       </div>
 
@@ -77,8 +80,8 @@
             <circle cx="12" cy="13" r="4"></circle>
           </svg>
         </div>
-        <div class="cam-notice-title">Forward Windshield Viewport</div>
-        <div class="cam-notice-sub" id="camNoticeText">Mount phone firmly on windshield facing forward roadway.</div>
+        <div class="cam-notice-title">Windshield Camera Feed</div>
+        <div class="cam-notice-sub" id="camNoticeText">Camera activates on 'Start Sensing'. Ensure phone faces road.</div>
       </div>
     </div>
 
@@ -86,15 +89,35 @@
     <div class="offline-queue-bar hidden" id="offlineQueueBar">
       <div class="flex items-center gap-2">
         <span class="queue-icon">⚡</span>
-        <span class="queue-text"><strong id="queueCount">0</strong> offline events waiting to sync</span>
+        <span class="queue-text font-mono"><strong id="queueCount">0</strong> offline events waiting</span>
       </div>
       <button class="btn-sync-now font-mono" id="btnSyncNow">Sync Now</button>
+    </div>
+
+    <!-- Operational Metrics Grid -->
+    <div class="metrics-dashboard-grid">
+      <div class="metric-box">
+        <span class="m-label font-mono">FRAMES</span>
+        <span class="m-val font-mono" id="metricFrames">0</span>
+      </div>
+      <div class="metric-box">
+        <span class="m-label font-mono">TELEMETRY</span>
+        <span class="m-val font-mono" id="metricTelemetry">0</span>
+      </div>
+      <div class="metric-box">
+        <span class="m-label font-mono">DETECTIONS</span>
+        <span class="m-val font-mono text-amber-400" id="metricDetections">0</span>
+      </div>
+      <div class="metric-box">
+        <span class="m-label font-mono">QUEUED</span>
+        <span class="m-val font-mono" id="metricQueued">0</span>
+      </div>
     </div>
 
     <!-- Live Telemetry Card -->
     <div class="telemetry-card">
       <div class="card-title-row">
-        <span class="card-title">REAL-TIME VEHICLE TELEMETRY</span>
+        <span class="card-title font-mono">GEOSPATIAL & MOTION TELEMETRY</span>
         <span class="card-status font-mono" id="gpsAccuracyBadge">-- m ACCURACY</span>
       </div>
       
@@ -115,57 +138,93 @@
           <span class="m-val highlight font-mono" id="speedVal">0.0 km/h</span>
         </div>
         <div class="metric-item">
-          <span class="m-label">VERTICAL Z-SHOCK</span>
-          <span class="m-val font-mono" id="imuVal">9.81 m/s²</span>
+          <span class="m-label">VERTICAL ΔZ</span>
+          <span class="m-val font-mono" id="imuVal">0.00 m/s²</span>
         </div>
         <div class="metric-item">
-          <span class="m-label">EVENTS TODAY</span>
-          <span class="m-val font-mono text-emerald-400" id="eventsCountVal">0</span>
+          <span class="m-label">VIBRATION</span>
+          <span class="m-val font-mono text-emerald-400" id="vibVal">NORMAL</span>
         </div>
       </div>
     </div>
 
-    <!-- Quick Snap Native Camera Input -->
-    <div class="quick-snap-card">
-      <label class="btn-snap" for="snapInput">
-        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-          <circle cx="12" cy="13" r="4"></circle>
-        </svg>
-        <span>Snap & Upload Defect Photo</span>
-      </label>
-      <input type="file" id="snapInput" accept="image/*" capture="environment" style="display:none;" />
-      <span class="snap-hint font-mono">High-resolution manual hazard capture</span>
-    </div>
-
-    <!-- Main Control Buttons -->
+    <!-- Primary Control Buttons -->
     <div class="controls-section">
-      <button id="toggleBtn" class="btn btn-primary btn-full-lg">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-        <span class="btn-text" id="toggleBtnText">Start Live Sensing</span>
-      </button>
+      <div class="primary-btn-group">
+        <button id="toggleBtn" class="btn btn-primary font-mono">
+          <span id="toggleBtnText">Start Sensing</span>
+        </button>
+        <button id="pauseBtn" class="btn btn-secondary font-mono" disabled>
+          <span id="pauseBtnText">Pause</span>
+        </button>
+      </div>
+
+      <!-- Quick Snap Native Camera Input -->
+      <div class="quick-snap-card">
+        <label class="btn-snap font-mono" for="snapInput">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+          <span>Snap & Upload Defect Photo</span>
+        </label>
+        <input type="file" id="snapInput" accept="image/*" capture="environment" style="display:none;" />
+      </div>
     </div>
 
     <!-- Activity Transmission Log -->
     <div class="activity-log-card">
       <div class="card-title-row">
-        <span class="card-title">EDGE TRANSMISSION LOG</span>
-        <span class="log-clear font-mono" id="btnClearLog">Clear</span>
+        <span class="card-title font-mono">EDGE LOG STREAM</span>
+        <div class="flex items-center gap-2">
+          <button class="log-clear font-mono" id="btnDiagnostics">Diagnostics</button>
+          <button class="log-clear font-mono" id="btnClearLog">Clear</button>
+        </div>
       </div>
       <div class="log-stream font-mono" id="logStream">
-        <div class="log-line info">[INIT] Gartika Live Edge Unit initialized. Ready for sensor activation.</div>
+        <div class="log-line info">[INIT] Gartika Edge Controller ready. Ready for sensor activation.</div>
       </div>
     </div>
 
     <!-- Footer -->
     <footer class="edge-footer">
-      <div>Gartika AI • Mobile Transit Sensing Terminal</div>
+      <div>Gartika Urban Intelligence • Bus Edge Sensor</div>
       <div class="font-mono text-xs" id="connectionTarget">Host: Initializing...</div>
     </footer>
 
   </div>
 
-  <!-- Edge Application Entrypoint -->
+  <!-- Engineering Diagnostics Modal -->
+  <div class="modal-overlay hidden" id="diagModal">
+    <div class="modal-content font-mono">
+      <div class="modal-header">
+        <span class="modal-title">ENGINEERING DIAGNOSTICS</span>
+        <button class="btn-close" id="btnCloseDiag">✕</button>
+      </div>
+      <div class="diag-body" id="diagBody">
+        <div class="diag-row"><span>Device Node ID:</span> <strong id="diagDeviceId">--</strong></div>
+        <div class="diag-row"><span>Bus Identifier:</span> <strong id="diagBusId">--</strong></div>
+        <div class="diag-row"><span>Camera State:</span> <strong id="diagCam">--</strong></div>
+        <div class="diag-row"><span>GPS Fix & Age:</span> <strong id="diagGps">--</strong></div>
+        <div class="diag-row"><span>IMU Gravity Cal:</span> <strong id="diagImu">--</strong></div>
+        <div class="diag-row"><span>Network RTT:</span> <strong id="diagRtt">--</strong></div>
+        <div class="diag-row"><span>Queue Backlog:</span> <strong id="diagQueue">--</strong></div>
+        <div class="diag-row"><span>Failed Retries:</span> <strong id="diagFailed">--</strong></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary font-mono text-xs" id="btnRetryFailed">Retry Failed</button>
+        <button class="btn btn-secondary font-mono text-xs" id="btnClearFailed">Clear Failed</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="src/offline-queue.js"></script>
+  <script src="src/camera.js"></script>
+  <script src="src/gps.js"></script>
+  <script src="src/imu.js"></script>
+  <script src="src/connection-manager.js"></script>
+  <script src="src/controller.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

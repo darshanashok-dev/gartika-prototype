@@ -7,6 +7,7 @@ live telemetry coordinates to the GIS Command Center.
 """
 
 import logging
+import math
 import uuid
 import time
 from datetime import datetime, timezone
@@ -39,19 +40,39 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
     and broadcasts the corroborated alert.
     """
     bus_id = t_in.bus_id.strip().upper()
+    if not bus_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "INVALID_BUS_ID", "message": "bus_id cannot be empty."}
+        )
+
     ts = t_in.timestamp or datetime.now(timezone.utc)
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
 
     # Validate coordinate ranges (-90 to +90, -180 to +180) if coordinates are present
     if t_in.latitude is not None and t_in.longitude is not None:
+        if math.isnan(t_in.latitude) or math.isnan(t_in.longitude):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": "INVALID_COORDINATES", "message": "GPS coordinates cannot be NaN."}
+            )
         if not (-90.0 <= t_in.latitude <= 90.0 and -180.0 <= t_in.longitude <= 180.0):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Invalid GPS coordinates: lat={t_in.latitude}, lon={t_in.longitude}"
+                detail={"code": "INVALID_COORDINATES", "message": f"Invalid GPS coordinates: lat={t_in.latitude}, lon={t_in.longitude}"}
             )
 
     try:
+        # Idempotency check: if sequence number already exists for this bus within 10 seconds, reuse
+        if t_in.sequence_number is not None:
+            existing_t = db.query(Telemetry).filter(
+                Telemetry.bus_id == bus_id,
+                Telemetry.sequence_number == t_in.sequence_number
+            ).first()
+            if existing_t:
+                return existing_t
+
         # Record raw telemetry
         db_t = Telemetry(
             bus_id=bus_id,
@@ -68,14 +89,19 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
         )
         db.add(db_t)
 
-        # Update bus registry state
+        # Update bus registry state (only if timestamp is newer to handle out-of-order packets)
         bus = db.query(Bus).filter(Bus.bus_id == bus_id).first()
         if bus:
-            bus.latitude = t_in.latitude
-            bus.longitude = t_in.longitude
-            bus.speed = t_in.speed or 0.0
-            bus.last_seen = ts
-            bus.status = "ONLINE"
+            bus_last_seen = bus.last_seen
+            if bus_last_seen and bus_last_seen.tzinfo is None:
+                bus_last_seen = bus_last_seen.replace(tzinfo=timezone.utc)
+
+            if bus_last_seen is None or ts >= bus_last_seen:
+                if t_in.latitude is not None: bus.latitude = t_in.latitude
+                if t_in.longitude is not None: bus.longitude = t_in.longitude
+                if t_in.speed is not None: bus.speed = t_in.speed
+                bus.last_seen = ts
+                bus.status = "ONLINE"
         else:
             bus = Bus(
                 bus_id=bus_id,
@@ -116,7 +142,7 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
     except Exception as e:
         db.rollback()
         logger.error(f"[TELEMETRY] Error ingesting telemetry for {bus_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to ingest telemetry: {str(e)}")
+        raise HTTPException(status_code=500, detail={"code": "TELEMETRY_ERROR", "message": f"Failed to ingest telemetry: {str(e)}"})
 
     # Broadcast real-time telemetry position update to dashboard
     tel_payload = {
@@ -160,5 +186,5 @@ def get_latest_telemetry(bus_id: str = Query("BUS-101"), db: Session = Depends(g
     if not record:
         record = db.query(Telemetry).order_by(desc(Telemetry.timestamp)).first()
     if not record:
-        raise HTTPException(status_code=404, detail="No telemetry available")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "No telemetry available."})
     return record

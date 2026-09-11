@@ -1,407 +1,300 @@
 /**
- * Gartika Mobile Edge Unit Sensing Controller.
+ * Gartika Mobile Edge Sensing Application Entrypoint.
  * 
- * Manages front camera capture, continuous Geolocation tracking,
- * calibrated DeviceMotion IMU shock detection, offline queueing,
- * and periodic batch transmission to central Gartika fusion backend.
+ * Binds UI DOM elements to the central MobileSensorController,
+ * manages status updates, handles camera permissions, user interactions,
+ * manual photo capture, and engineering diagnostics.
  */
 
 class GartikaMobileEdgeApp {
   constructor() {
-    this.backendUrl = window.location.origin;
-    this.wsUrl = (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/events';
-    
-    // State
-    this.isSensing = false;
-    this.busId = 'BUS-101';
-    this.sequenceNumber = 1;
-    this.packetsCount = 0;
-    this.eventsToday = 0;
-    
-    // Hardware streams
-    this.cameraStream = null;
-    this.gpsWatchId = null;
-    this.currentLat = null;
-    this.currentLon = null;
-    this.currentSpeed = 0;
-    this.currentAccuracy = null;
-    this.currentAz = 9.81;
-    
-    // Offline Storage Queue
-    this.offlineQueue = [];
-    this.ws = null;
-    
+    this.controller = new MobileSensorController({
+      onStatusUpdate: (status) => this.renderStatus(status),
+      onLog: (msg, type) => this.log(msg, type)
+    });
+
     this.init();
   }
 
   init() {
     this.bindDOM();
-    this.initWebSocket();
+    this.controller.setVideoElement(this.cameraPreview);
     this.bindEvents();
     this.updateHostTarget();
+    this.controller.notifyStatus();
   }
 
   bindDOM() {
-    this.busIdInput = document.getElementById('busIdInput');
-    this.toggleBtn = document.getElementById('toggleBtn');
-    this.toggleBtnText = document.getElementById('toggleBtnText');
-    this.sensingBanner = document.getElementById('sensingBanner');
-    this.bannerStateText = document.getElementById('bannerStateText');
-    this.bannerInstruction = document.getElementById('bannerInstruction');
+    this.busIdInput = document.getElementById("busIdInput");
+    this.toggleBtn = document.getElementById("toggleBtn");
+    this.toggleBtnText = document.getElementById("toggleBtnText");
+    this.pauseBtn = document.getElementById("pauseBtn");
+    this.pauseBtnText = document.getElementById("pauseBtnText");
     
-    this.camStatus = document.getElementById('camStatus');
-    this.gpsStatus = document.getElementById('gpsStatus');
-    this.imuStatus = document.getElementById('imuStatus');
-    this.netStatus = document.getElementById('netStatus');
+    this.sensingBanner = document.getElementById("sensingBanner");
+    this.bannerStateText = document.getElementById("bannerStateText");
+    this.bannerInstruction = document.getElementById("bannerInstruction");
     
-    this.cameraPreview = document.getElementById('cameraPreview');
-    this.camFallbackMsg = document.getElementById('camFallbackMsg');
-    this.ingestMode = document.getElementById('ingestMode');
-    this.hudPackets = document.getElementById('hudPackets');
-    this.recDot = document.getElementById('recDot');
-    
-    this.latVal = document.getElementById('latVal');
-    this.lonVal = document.getElementById('lonVal');
-    this.speedVal = document.getElementById('speedVal');
-    this.imuVal = document.getElementById('imuVal');
-    this.eventsCountVal = document.getElementById('eventsCountVal');
-    this.gpsAccuracyBadge = document.getElementById('gpsAccuracyBadge');
-    
-    this.offlineQueueBar = document.getElementById('offlineQueueBar');
-    this.queueCount = document.getElementById('queueCount');
-    this.btnSyncNow = document.getElementById('btnSyncNow');
-    
-    this.snapInput = document.getElementById('snapInput');
-    this.logStream = document.getElementById('logStream');
-    this.btnClearLog = document.getElementById('btnClearLog');
-    this.connectionTarget = document.getElementById('connectionTarget');
-  }
+    this.camStatus = document.getElementById("camStatus");
+    this.camStatusText = document.getElementById("camStatusText");
+    this.gpsStatus = document.getElementById("gpsStatus");
+    this.gpsStatusText = document.getElementById("gpsStatusText");
+    this.imuStatus = document.getElementById("imuStatus");
+    this.imuStatusText = document.getElementById("imuStatusText");
+    this.netStatus = document.getElementById("netStatus");
+    this.netStatusText = document.getElementById("netStatusText");
 
-  updateHostTarget() {
-    if (this.connectionTarget) {
-      this.connectionTarget.textContent = 'Server: ' + window.location.host;
-    }
-  }
+    this.cameraPreview = document.getElementById("cameraPreview");
+    this.camFallbackMsg = document.getElementById("camFallbackMsg");
+    this.ingestMode = document.getElementById("ingestMode");
+    this.hudPing = document.getElementById("hudPing");
 
-  log(msg, type = 'info') {
-    if (!this.logStream) return;
-    const line = document.createElement('div');
-    line.className = 'log-line ' + type;
-    line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
-    this.logStream.appendChild(line);
-    this.logStream.scrollTop = this.logStream.scrollHeight;
-  }
+    this.offlineQueueBar = document.getElementById("offlineQueueBar");
+    this.queueCount = document.getElementById("queueCount");
+    this.btnSyncNow = document.getElementById("btnSyncNow");
 
-  initWebSocket() {
-    try {
-      this.ws = new WebSocket(this.wsUrl);
-      this.ws.onopen = () => {
-        if (this.netStatus) this.netStatus.classList.add('online');
-        this.log('Connected to Gartika central WebSocket hub.', 'info');
-      };
-      this.ws.onclose = () => {
-        if (this.netStatus) this.netStatus.classList.remove('online');
-        setTimeout(() => this.initWebSocket(), 4000);
-      };
-    } catch (e) {
-      setTimeout(() => this.initWebSocket(), 4000);
-    }
+    this.metricFrames = document.getElementById("metricFrames");
+    this.metricTelemetry = document.getElementById("metricTelemetry");
+    this.metricDetections = document.getElementById("metricDetections");
+    this.metricQueued = document.getElementById("metricQueued");
+
+    this.latVal = document.getElementById("latVal");
+    this.lonVal = document.getElementById("lonVal");
+    this.speedVal = document.getElementById("speedVal");
+    this.imuVal = document.getElementById("imuVal");
+    this.vibVal = document.getElementById("vibVal");
+    this.gpsAccuracyBadge = document.getElementById("gpsAccuracyBadge");
+
+    this.snapInput = document.getElementById("snapInput");
+    this.logStream = document.getElementById("logStream");
+    this.btnClearLog = document.getElementById("btnClearLog");
+    this.btnDiagnostics = document.getElementById("btnDiagnostics");
+    this.connectionTarget = document.getElementById("connectionTarget");
+
+    // Modal
+    this.diagModal = document.getElementById("diagModal");
+    this.btnCloseDiag = document.getElementById("btnCloseDiag");
+    this.diagDeviceId = document.getElementById("diagDeviceId");
+    this.diagBusId = document.getElementById("diagBusId");
+    this.diagCam = document.getElementById("diagCam");
+    this.diagGps = document.getElementById("diagGps");
+    this.diagImu = document.getElementById("diagImu");
+    this.diagRtt = document.getElementById("diagRtt");
+    this.diagQueue = document.getElementById("diagQueue");
+    this.diagFailed = document.getElementById("diagFailed");
+    this.btnRetryFailed = document.getElementById("btnRetryFailed");
+    this.btnClearFailed = document.getElementById("btnClearFailed");
   }
 
   bindEvents() {
     if (this.toggleBtn) {
-      this.toggleBtn.addEventListener('click', () => this.toggleSensing());
+      this.toggleBtn.addEventListener("click", () => this.handleToggle());
+    }
+
+    if (this.pauseBtn) {
+      this.pauseBtn.addEventListener("click", () => this.handlePause());
     }
 
     if (this.busIdInput) {
-      this.busIdInput.addEventListener('change', () => {
-        this.busId = this.busIdInput.value.trim().toUpperCase() || 'BUS-101';
+      this.busIdInput.addEventListener("change", () => {
+        this.controller.setBusId(this.busIdInput.value);
       });
     }
 
     if (this.snapInput) {
-      this.snapInput.addEventListener('change', (e) => this.handleSnapUpload(e));
+      this.snapInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          this.controller.uploadManualPhoto(file);
+          this.snapInput.value = "";
+        }
+      });
     }
 
     if (this.btnSyncNow) {
-      this.btnSyncNow.addEventListener('click', () => this.flushOfflineQueue());
+      this.btnSyncNow.addEventListener("click", () => this.controller.flushQueue());
     }
 
     if (this.btnClearLog) {
-      this.btnClearLog.addEventListener('click', () => {
-        if (this.logStream) this.logStream.innerHTML = '';
+      this.btnClearLog.addEventListener("click", () => {
+        if (this.logStream) this.logStream.innerHTML = "";
+      });
+    }
+
+    if (this.btnDiagnostics) {
+      this.btnDiagnostics.addEventListener("click", () => this.openDiagnostics());
+    }
+
+    if (this.btnCloseDiag) {
+      this.btnCloseDiag.addEventListener("click", () => this.closeDiagnostics());
+    }
+
+    if (this.btnRetryFailed) {
+      this.btnRetryFailed.addEventListener("click", async () => {
+        const count = await this.controller.queue.retryFailed();
+        this.log(`Retrying ${count} failed events.`, "info");
+        this.controller.flushQueue();
+      });
+    }
+
+    if (this.btnClearFailed) {
+      this.btnClearFailed.addEventListener("click", async () => {
+        const count = await this.controller.queue.clearFailed();
+        this.log(`Cleared ${count} failed events.`, "info");
+        this.controller.notifyStatus();
       });
     }
   }
 
-  async toggleSensing() {
-    if (this.isSensing) {
-      this.stopSensing();
+  updateHostTarget() {
+    if (this.connectionTarget) {
+      this.connectionTarget.textContent = `Server: ${window.location.host}`;
+    }
+  }
+
+  async handleToggle() {
+    if (this.controller.isSensing) {
+      this.controller.stopSensing();
     } else {
-      await this.startSensing();
+      await this.controller.startSensing();
     }
   }
 
-  async startSensing() {
-    this.isSensing = true;
-    this.busId = this.busIdInput.value.trim().toUpperCase() || 'BUS-101';
-    
-    this.toggleBtn.classList.add('sensing');
-    this.toggleBtnText.textContent = 'Stop Sensing';
-    
-    this.sensingBanner.className = 'sensing-status-banner sensing';
-    this.bannerStateText.textContent = 'ACTIVE SENSING';
-    this.bannerInstruction.textContent = 'Phone mounted facing forward. Streaming telemetry & road frames.';
-    this.ingestMode.textContent = 'LIVE SENSING';
-
-    this.log('Starting hardware sensor pipelines for ' + this.busId + '...', 'info');
-
-    // 1. Camera Access
-    await this.initCamera();
-
-    // 2. GPS Geolocation
-    this.initGps();
-
-    // 3. IMU Accelerometer
-    this.initImu();
-
-    // 4. Periodic telemetry transmission loop (every 1.5s)
-    this.telemetryInterval = setInterval(() => this.transmitTelemetry(), 1500);
-
-    // 5. Periodic frame sample transmission loop (every 2.0s)
-    this.frameInterval = setInterval(() => this.captureAndTransmitFrame(), 2000);
-  }
-
-  stopSensing() {
-    this.isSensing = false;
-    this.toggleBtn.classList.remove('sensing');
-    this.toggleBtnText.textContent = 'Start Live Sensing';
-    
-    this.sensingBanner.className = 'sensing-status-banner standby';
-    this.bannerStateText.textContent = 'STANDBY';
-    this.bannerInstruction.textContent = 'Tap Start Live Sensing to activate sensors.';
-    this.ingestMode.textContent = 'STANDBY';
-
-    if (this.cameraStream) {
-      this.cameraStream.getTracks().forEach(t => t.stop());
-      this.cameraStream = null;
-    }
-    if (this.camStatus) this.camStatus.classList.remove('online');
-    if (this.camFallbackMsg) this.camFallbackMsg.classList.remove('hidden');
-
-    if (this.gpsWatchId) {
-      navigator.geolocation.clearWatch(this.gpsWatchId);
-      this.gpsWatchId = null;
-    }
-    if (this.gpsStatus) this.gpsStatus.classList.remove('online');
-
-    clearInterval(this.telemetryInterval);
-    clearInterval(this.frameInterval);
-    this.log('Sensing halted.', 'warn');
-  }
-
-  async initCamera() {
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        });
-        this.cameraStream = stream;
-        this.cameraPreview.srcObject = stream;
-        if (this.camStatus) this.camStatus.classList.add('online');
-        if (this.camFallbackMsg) this.camFallbackMsg.classList.add('hidden');
-        this.log('Camera activated successfully.', 'info');
-      }
-    } catch (e) {
-      this.log('Camera permission denied or unavailable on HTTP. Using photo capture fallback.', 'warn');
+  handlePause() {
+    if (!this.controller.isSensing) return;
+    if (this.controller.isPaused) {
+      this.controller.resumeSensing();
+    } else {
+      this.controller.pauseSensing();
     }
   }
 
-  initGps() {
-    if ('geolocation' in navigator) {
-      this.gpsWatchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          this.currentLat = pos.coords.latitude;
-          this.currentLon = pos.coords.longitude;
-          this.currentSpeed = (pos.coords.speed || 0) * 3.6; // m/s to km/h
-          this.currentAccuracy = pos.coords.accuracy;
-
-          if (this.latVal) this.latVal.textContent = this.currentLat.toFixed(5);
-          if (this.lonVal) this.lonVal.textContent = this.currentLon.toFixed(5);
-          if (this.speedVal) this.speedVal.textContent = this.currentSpeed.toFixed(1) + ' km/h';
-          if (this.gpsAccuracyBadge) this.gpsAccuracyBadge.textContent = this.currentAccuracy.toFixed(0) + 'm ACCURACY';
-          if (this.gpsStatus) this.gpsStatus.classList.add('online');
-        },
-        (err) => {
-          this.log('Waiting for high-accuracy GPS lock...', 'warn');
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
-      );
-    }
+  log(msg, type = "info") {
+    if (!this.logStream) return;
+    const line = document.createElement("div");
+    line.className = `log-line ${type}`;
+    const ts = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    line.textContent = `[${ts}] ${msg}`;
+    this.logStream.appendChild(line);
+    this.logStream.scrollTop = this.logStream.scrollHeight;
   }
 
-  initImu() {
-    if (window.DeviceMotionEvent) {
-      window.addEventListener('devicemotion', (evt) => {
-        if (evt.accelerationIncludingGravity) {
-          const az = evt.accelerationIncludingGravity.z || 9.81;
-          this.currentAz = az;
-          if (this.imuVal) this.imuVal.textContent = az.toFixed(2) + ' m/s²';
-          if (this.imuStatus) this.imuStatus.classList.add('online');
-
-          // Mechanical shock detected
-          if (Math.abs(az - 9.81) > 3.2) {
-            this.log('IMU Shock Detected: ' + az.toFixed(2) + ' m/s²', 'warn');
-            this.captureAndTransmitFrame();
-          }
-        }
-      });
-    }
-  }
-
-  async transmitTelemetry() {
-    if (!this.isSensing) return;
-    this.packetsCount++;
-    if (this.hudPackets) this.hudPackets.textContent = this.packetsCount;
-
-    const payload = {
-      bus_id: this.busId,
-      latitude: this.currentLat,
-      longitude: this.currentLon,
-      speed: this.currentSpeed,
-      heading: 0.0,
-      timestamp: Date.now() / 1000,
-      ax: 0.0,
-      ay: 0.0,
-      az: this.currentAz,
-      sequence_number: this.sequenceNumber++
-    };
-
-    try {
-      const res = await fetch(this.backendUrl + '/api/v1/telemetry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-    } catch (e) {
-      this.enqueueOffline(payload);
-    }
-  }
-
-  async captureAndTransmitFrame() {
-    if (!this.isSensing || !this.cameraStream) return;
-    
-    try {
-      let blob = null;
-      if (window.ImageCapture && this.cameraStream.getVideoTracks().length > 0) {
-        try {
-          const track = this.cameraStream.getVideoTracks()[0];
-          const imageCapture = new ImageCapture(track);
-          blob = await imageCapture.takePhoto();
-        } catch (_) {}
-      }
-
-      // Universal Canvas Fallback for Safari, Firefox & iOS browsers
-      if (!blob && this.cameraPreview && this.cameraPreview.videoWidth > 0) {
-        const canvas = document.createElement('canvas');
-        canvas.width = this.cameraPreview.videoWidth;
-        canvas.height = this.cameraPreview.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(this.cameraPreview, 0, 0, canvas.width, canvas.height);
-        blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-      }
-
-      if (!blob) return;
-
-      const formData = new FormData();
-      formData.append('file', blob, 'frame.jpg');
-      formData.append('bus_id', this.busId);
-      if (this.currentLat && this.currentLon) {
-        formData.append('latitude', this.currentLat);
-        formData.append('longitude', this.currentLon);
-      }
-
-      const res = await fetch(this.backendUrl + '/api/v1/stream/frame', {
-        method: 'POST',
-        body: formData
-      });
-      if (res.ok) {
-        this.eventsToday++;
-        if (this.eventsCountVal) this.eventsCountVal.textContent = this.eventsToday;
-      }
-    } catch (e) {
-      // Background frame capture error
-    }
-  }
-
-  async handleSnapUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    this.log('Uploading manual defect photograph...', 'info');
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('bus_id', this.busId);
-    if (this.currentLat && this.currentLon) {
-      formData.append('latitude', this.currentLat);
-      formData.append('longitude', this.currentLon);
-    }
-
-    try {
-      const res = await fetch(this.backendUrl + '/api/v1/stream/frame', {
-        method: 'POST',
-        body: formData
-      });
-      if (res.ok) {
-        this.log('Defect photo successfully analyzed and uploaded!', 'info');
-        this.eventsToday++;
-        if (this.eventsCountVal) this.eventsCountVal.textContent = this.eventsToday;
+  renderStatus(st) {
+    // 1. Banner & Controls
+    if (st.isSensing) {
+      if (st.isPaused) {
+        this.sensingBanner.className = "sensing-status-banner paused";
+        this.bannerStateText.textContent = "SENSING PAUSED";
+        this.bannerInstruction.textContent = "Telemetry & camera capture paused. Tap Resume to continue.";
+        this.ingestMode.textContent = "PAUSED";
+        this.pauseBtn.disabled = false;
+        this.pauseBtnText.textContent = "Resume";
       } else {
-        this.log('Upload failed. Queued offline.', 'warn');
+        this.sensingBanner.className = "sensing-status-banner sensing";
+        this.bannerStateText.textContent = "ACTIVE SENSING";
+        this.bannerInstruction.textContent = "Vehicle mounted facing forward. Streaming telemetry & dashcam.";
+        this.ingestMode.textContent = "LIVE";
+        this.pauseBtn.disabled = false;
+        this.pauseBtnText.textContent = "Pause";
       }
-    } catch (err) {
-      this.log('Network unavailable. Photo queued offline.', 'warn');
+      this.toggleBtn.classList.add("sensing");
+      this.toggleBtnText.textContent = "Stop Sensing";
+    } else {
+      this.sensingBanner.className = "sensing-status-banner standby";
+      this.bannerStateText.textContent = "STANDBY";
+      this.bannerInstruction.textContent = "Mount phone firmly on windshield. Tap 'Start Sensing' to begin.";
+      this.ingestMode.textContent = "STANDBY";
+      this.toggleBtn.classList.remove("sensing");
+      this.toggleBtnText.textContent = "Start Sensing";
+      this.pauseBtn.disabled = true;
+      this.pauseBtnText.textContent = "Pause";
     }
+
+    // 2. Camera Status
+    const camRunning = st.cameraState === "RUNNING";
+    this.camStatusText.textContent = st.cameraState;
+    this.camStatus.className = `status-pill ${camRunning ? "online" : (st.cameraState === "PAUSED" ? "warn" : "")}`;
+    if (this.camFallbackMsg) {
+      if (camRunning) this.camFallbackMsg.classList.add("hidden");
+      else this.camFallbackMsg.classList.remove("hidden");
+    }
+
+    // 3. GPS Status
+    const gpsFixed = st.gpsState === "FIXED";
+    this.gpsStatusText.textContent = st.gpsState;
+    this.gpsStatus.className = `status-pill ${gpsFixed ? "online" : (st.gpsState === "STALE" ? "warn" : "")}`;
+
+    if (st.gpsReading) {
+      this.latVal.textContent = st.gpsReading.latitude !== null ? st.gpsReading.latitude.toFixed(6) : "--";
+      this.lonVal.textContent = st.gpsReading.longitude !== null ? st.gpsReading.longitude.toFixed(6) : "--";
+      this.speedVal.textContent = `${(st.gpsReading.speed || 0.0).toFixed(1)} km/h`;
+      this.gpsAccuracyBadge.textContent = st.gpsReading.accuracy !== null ? `±${st.gpsReading.accuracy.toFixed(0)}m ACCURACY` : "-- m";
+    } else {
+      this.latVal.textContent = "--";
+      this.lonVal.textContent = "--";
+      this.speedVal.textContent = "0.0 km/h";
+      this.gpsAccuracyBadge.textContent = "-- m ACCURACY";
+    }
+
+    // 4. IMU Status
+    const imuActive = st.imuState === "ACTIVE";
+    this.imuStatusText.textContent = st.imuState === "ACTIVE" ? "ACTIVE" : st.imuState;
+    this.imuStatus.className = `status-pill ${imuActive ? "online" : ""}`;
+
+    if (st.imuReading) {
+      this.imuVal.textContent = `${st.imuReading.gravity_compensated_z.toFixed(2)} m/s²`;
+      this.vibVal.textContent = st.imuReading.vibration_level;
+      if (st.imuReading.vibration_level === "HIGH") {
+        this.vibVal.className = "m-val font-mono text-rose-400";
+      } else if (st.imuReading.vibration_level === "MEDIUM") {
+        this.vibVal.className = "m-val font-mono text-amber-400";
+      } else {
+        this.vibVal.className = "m-val font-mono text-emerald-400";
+      }
+    }
+
+    // 5. Network Status
+    const netOnline = st.network.backendOnline;
+    this.netStatusText.textContent = netOnline ? "ONLINE" : (st.network.internetOnline ? "CONN..." : "OFFLINE");
+    this.netStatus.className = `status-pill ${netOnline ? "online" : (st.network.internetOnline ? "warn" : "error")}`;
+    if (this.hudPing) {
+      this.hudPing.textContent = st.network.rttMs !== null ? `${st.network.rttMs}ms` : "--";
+    }
+
+    // 6. Queue Bar
+    if (st.queue.pending > 0) {
+      this.offlineQueueBar.classList.remove("hidden");
+      this.queueCount.textContent = st.queue.pending;
+    } else {
+      this.offlineQueueBar.classList.add("hidden");
+    }
+
+    // 7. Metrics
+    this.metricFrames.textContent = st.metrics.framesUploaded;
+    this.metricTelemetry.textContent = st.metrics.telemetrySent;
+    this.metricDetections.textContent = st.metrics.detectionsCount;
+    this.metricQueued.textContent = st.queue.pending;
   }
 
-  enqueueOffline(item) {
-    this.offlineQueue.push(item);
-    if (this.offlineQueueBar) this.offlineQueueBar.classList.remove('hidden');
-    if (this.queueCount) this.queueCount.textContent = this.offlineQueue.length;
+  async openDiagnostics() {
+    const st = await this.controller.getStatus();
+    this.diagDeviceId.textContent = st.deviceId;
+    this.diagBusId.textContent = st.busId;
+    this.diagCam.textContent = st.cameraState;
+    this.diagGps.textContent = `${st.gpsState} (${st.gpsReading ? (st.gpsReading.accuracy ? `±${st.gpsReading.accuracy.toFixed(1)}m` : 'locked') : 'no fix'})`;
+    this.diagImu.textContent = `${st.imuState} (Base G: ${st.imuReading ? st.imuReading.baseline_g : 9.81} m/s²)`;
+    this.diagRtt.textContent = st.network.rttMs !== null ? `${st.network.rttMs} ms` : "Offline";
+    this.diagQueue.textContent = `${st.queue.pending} pending / ${st.queue.total} total`;
+    this.diagFailed.textContent = `${st.queue.failed} permanently failed`;
+
+    if (this.diagModal) this.diagModal.classList.remove("hidden");
   }
 
-  async flushOfflineQueue() {
-    if (this.offlineQueue.length === 0) return;
-    this.log('Flushing ' + this.offlineQueue.length + ' queued telemetry packets...', 'info');
-
-    while (this.offlineQueue.length > 0) {
-      const item = this.offlineQueue[0];
-      try {
-        const res = await fetch(this.backendUrl + '/api/v1/telemetry', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item)
-        });
-        if (res.ok) {
-          this.offlineQueue.shift();
-          if (this.queueCount) this.queueCount.textContent = this.offlineQueue.length;
-        } else {
-          break;
-        }
-      } catch (e) {
-        break;
-      }
-    }
-
-    if (this.offlineQueue.length === 0) {
-      if (this.offlineQueueBar) this.offlineQueueBar.classList.add('hidden');
-      this.log('All offline telemetry packets synchronized.', 'info');
-    }
+  closeDiagnostics() {
+    if (this.diagModal) this.diagModal.classList.add("hidden");
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
   window.gartikaMobileApp = new GartikaMobileEdgeApp();
 });

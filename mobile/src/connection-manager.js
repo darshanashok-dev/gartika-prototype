@@ -1,40 +1,105 @@
 /**
  * Connection Manager for Gartika Mobile Edge.
  * 
- * Manages network reachability, WebSocket connection states, exponential backoff,
- * and automatic queue flushing upon reconnection.
+ * Features:
+ * - Distinct tracking of:
+ *   - Internet (navigator.onLine)
+ *   - Backend Reachability (HTTP /health probe & RTT latency)
+ *   - WebSocket Connection (/ws/events state)
+ * - Single-timer exponential backoff reconnect without duplicate interval storms.
+ * - Automatic queue flush trigger on backend recovery.
  */
 
 class ConnectionManager {
-  constructor(baseUrl, wsUrl, onStateChange = () => {}) {
+  constructor(baseUrl, wsUrl, options = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.wsUrl = wsUrl;
-    this.onStateChange = onStateChange;
-    this.state = "DISCONNECTED"; // CONNECTED, CONNECTING, DISCONNECTED, RECONNECTING, OFFLINE
-    this.ws = null;
+    this.onStateChange = options.onStateChange || (() => {});
+    this.onBackendRestored = options.onBackendRestored || (() => {});
+    
+    this.internetOnline = navigator.onLine;
+    this.backendOnline = false;
+    this.wsConnected = false;
+    this.rttMs = null;
     this.reconnectAttempts = 0;
     this.maxReconnectDelayMs = 15000;
-    this.pingInterval = null;
+    
+    this.ws = null;
+    this.reconnectTimer = null;
+    this.healthCheckTimer = null;
+
+    this.bindWindowEvents();
   }
 
-  setState(newState, detail = null) {
-    this.state = newState;
-    this.onStateChange(this.state, detail);
+  bindWindowEvents() {
+    window.addEventListener("online", () => {
+      this.internetOnline = true;
+      this.checkHealth();
+      this.notifyState();
+    });
+
+    window.addEventListener("offline", () => {
+      this.internetOnline = false;
+      this.backendOnline = false;
+      this.wsConnected = false;
+      this.notifyState();
+    });
+  }
+
+  notifyState() {
+    let overallState = "ONLINE";
+    if (!this.internetOnline) overallState = "OFFLINE";
+    else if (!this.backendOnline) overallState = "RECONNECTING";
+    else if (!this.wsConnected) overallState = "CONNECTING";
+
+    this.onStateChange({
+      state: overallState,
+      internetOnline: this.internetOnline,
+      backendOnline: this.backendOnline,
+      wsConnected: this.wsConnected,
+      rttMs: this.rttMs
+    });
   }
 
   async checkHealth() {
     const start = Date.now();
     try {
-      const res = await fetch(`${this.baseUrl}/health`, { cache: "no-store" });
+      const res = await fetch(`${this.baseUrl}/health`, { 
+        cache: "no-store", 
+        headers: { "Accept": "application/json" } 
+      });
       if (res.ok) {
-        const pingMs = Date.now() - start;
+        this.rttMs = Date.now() - start;
+        const wasOffline = !this.backendOnline;
+        this.backendOnline = true;
         this.reconnectAttempts = 0;
-        return { online: true, pingMs };
+        this.notifyState();
+
+        if (wasOffline) {
+          this.onBackendRestored();
+        }
+        return true;
+      } else {
+        this.backendOnline = false;
+        this.notifyState();
+        return false;
       }
-      return { online: false, pingMs: null };
     } catch (e) {
-      return { online: false, pingMs: null };
+      this.backendOnline = false;
+      this.rttMs = null;
+      this.notifyState();
+      return false;
     }
+  }
+
+  start() {
+    this.checkHealth();
+    this.connectWebSocket();
+
+    if (this.healthCheckTimer) clearInterval(this.healthCheckTimer);
+    this.healthCheckTimer = setInterval(() => {
+      this.checkHealth();
+    }, 5000);
   }
 
   connectWebSocket() {
@@ -42,45 +107,59 @@ class ConnectionManager {
       return;
     }
 
-    this.setState(this.reconnectAttempts > 0 ? "RECONNECTING" : "CONNECTING");
-
     try {
       this.ws = new WebSocket(this.wsUrl);
 
       this.ws.onopen = () => {
+        this.wsConnected = true;
         this.reconnectAttempts = 0;
-        this.setState("CONNECTED");
+        this.notifyState();
       };
 
       this.ws.onclose = () => {
-        this.setState("DISCONNECTED");
+        this.wsConnected = false;
+        this.notifyState();
         this.scheduleReconnect();
       };
 
       this.ws.onerror = () => {
-        this.setState("DISCONNECTED");
+        this.wsConnected = false;
+        this.notifyState();
       };
     } catch (e) {
-      this.setState("OFFLINE");
+      this.wsConnected = false;
+      this.notifyState();
       this.scheduleReconnect();
     }
   }
 
   scheduleReconnect() {
+    if (this.reconnectTimer) return; // Single-timer protection
+
     this.reconnectAttempts++;
-    // Exponential backoff with jitter: min(15s, 1s * 1.5^attempts)
     const delay = Math.min(this.maxReconnectDelayMs, Math.floor(1000 * Math.pow(1.5, this.reconnectAttempts)));
-    setTimeout(() => {
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.checkHealth();
       this.connectWebSocket();
     }, delay);
   }
 
-  disconnect() {
+  stop() {
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
-    this.setState("DISCONNECTED");
+    this.wsConnected = false;
+    this.notifyState();
   }
 }
 
