@@ -294,9 +294,26 @@ class GartikaMobileEdgeApp {
     if (!this.isSensing || !this.cameraStream) return;
     
     try {
-      const track = this.cameraStream.getVideoTracks()[0];
-      const imageCapture = new ImageCapture(track);
-      const blob = await imageCapture.takePhoto();
+      let blob = null;
+      if (window.ImageCapture && this.cameraStream.getVideoTracks().length > 0) {
+        try {
+          const track = this.cameraStream.getVideoTracks()[0];
+          const imageCapture = new ImageCapture(track);
+          blob = await imageCapture.takePhoto();
+        } catch (_) {}
+      }
+
+      // Universal Canvas Fallback for Safari, Firefox & iOS browsers
+      if (!blob && this.cameraPreview && this.cameraPreview.videoWidth > 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = this.cameraPreview.videoWidth;
+        canvas.height = this.cameraPreview.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(this.cameraPreview, 0, 0, canvas.width, canvas.height);
+        blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+      }
+
+      if (!blob) return;
 
       const formData = new FormData();
       formData.append('file', blob, 'frame.jpg');
