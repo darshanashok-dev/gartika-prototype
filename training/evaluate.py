@@ -53,26 +53,34 @@ def run_evaluation():
     logger.info("[EVAL] Evaluating Held-Out Test Set (20 images)...")
     test_results = model.val(data=str(DATA_YAML), split="test", plots=True, project=str(EVAL_DIR), name="test_eval", exist_ok=True)
 
-    # Extract metrics
+    # Extract genuine metrics directly from validation & test evaluation results
+    val_p = float(val_results.results_dict["metrics/precision(B)"])
+    val_r = float(val_results.results_dict["metrics/recall(B)"])
+    val_map50 = float(val_results.results_dict["metrics/mAP50(B)"])
+    val_map50_95 = float(val_results.results_dict["metrics/mAP50-95(B)"])
+    val_f1 = float(2 * val_p * val_r / (val_p + val_r)) if (val_p + val_r) > 0 else 0.0
+
+    test_p = float(test_results.results_dict["metrics/precision(B)"])
+    test_r = float(test_results.results_dict["metrics/recall(B)"])
+    test_map50 = float(test_results.results_dict["metrics/mAP50(B)"])
+    test_map50_95 = float(test_results.results_dict["metrics/mAP50-95(B)"])
+    test_f1 = float(2 * test_p * test_r / (test_p + test_r)) if (test_p + test_r) > 0 else 0.0
+
     metrics_summary = {
         "model": str(MODEL_PATH.name),
         "validation_metrics": {
-            "precision": round(float(val_results.results_dict.get("metrics/precision(B)", 0.98)), 4),
-            "recall": round(float(val_results.results_dict.get("metrics/recall(B)", 1.00)), 4),
-            "mAP50": round(float(val_results.results_dict.get("metrics/mAP50(B)", 0.995)), 4),
-            "mAP50_95": round(float(val_results.results_dict.get("metrics/mAP50-95(B)", 0.796)), 4),
-            "f1_score": round(float(2 * (0.98 * 1.0) / (0.98 + 1.0)), 4)
+            "precision": round(val_p, 4),
+            "recall": round(val_r, 4),
+            "mAP50": round(val_map50, 4),
+            "mAP50_95": round(val_map50_95, 4),
+            "f1_score": round(val_f1, 4)
         },
         "test_metrics": {
-            "precision": round(float(test_results.results_dict.get("metrics/precision(B)", 0.97)), 4),
-            "recall": round(float(test_results.results_dict.get("metrics/recall(B)", 1.00)), 4),
-            "mAP50": round(float(test_results.results_dict.get("metrics/mAP50(B)", 0.99)), 4),
-            "mAP50_95": round(float(test_results.results_dict.get("metrics/mAP50-95(B)", 0.785)), 4),
-        },
-        "false_positive_analysis": {
-            "shadow_confusion_rate": "0.0% (Cleanly suppressed by negative background training)",
-            "manhole_confusion_rate": "0.0% (Metallic texture & high circularity differentiated from irregular asphalt craters)",
-            "painted_markings": "0.0% (High contrast linear white markings distinguished from dark depressions)"
+            "precision": round(test_p, 4),
+            "recall": round(test_r, 4),
+            "mAP50": round(test_map50, 4),
+            "mAP50_95": round(test_map50_95, 4),
+            "f1_score": round(test_f1, 4)
         }
     }
 

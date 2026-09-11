@@ -60,6 +60,8 @@ class Settings:
 
     # AI & Sensor Fusion
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.45"))
+    MODEL_PATH: Path = BASE_DIR / os.getenv("MODEL_PATH", "models/gartika_road_defect.pt")
+    ONNX_MODEL_PATH: Path = BASE_DIR / os.getenv("ONNX_MODEL_PATH", "models/gartika_road_defect.onnx")
     FUSION_TEMPORAL_WINDOW_MS: int = int(os.getenv("FUSION_TEMPORAL_WINDOW_MS", "500"))
     SPATIAL_DEDUP_METERS: float = float(os.getenv("SPATIAL_DEDUP_METERS", "15.0"))
     SPATIAL_DEDUP_WINDOW_SECONDS: int = int(os.getenv("SPATIAL_DEDUP_WINDOW_SECONDS", "300"))

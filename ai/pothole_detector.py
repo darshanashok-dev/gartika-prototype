@@ -60,6 +60,8 @@ class PotholeDetector:
         if model_path:
             candidates.append(Path(model_path))
         candidates.extend([
+            Path(__file__).resolve().parent.parent / "models" / "gartika_road_defect.pt",
+            Path("models/gartika_road_defect.pt"),
             Path(__file__).resolve().parent / "models" / "pothole_yolov8.pt",
             Path(__file__).resolve().parent / "models" / "best.pt",
             Path("ai/models/pothole_yolov8.pt")
