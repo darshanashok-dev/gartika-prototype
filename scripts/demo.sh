@@ -18,11 +18,19 @@ echo "[2/4] Resetting demo database..."
 python3 scripts/reset_demo.py
 
 # 3. Seed Deterministic Demo Scenarios
-echo "[3/4] Seeding initial fleet and transit corridors..."
+echo "[3/5] Seeding initial fleet and transit corridors..."
 python3 scripts/seed_demo_data.py || true
 
-# 4. Launch Backend Application Server
-echo "[4/4] Starting Gartika FastAPI & Real-time WebSocket Hub..."
+# 4. Build Frontend Distribution if needed
+if [ ! -d "dashboard/dist" ]; then
+    echo "[4/5] Building React Dashboard bundle..."
+    (cd dashboard && npm run build)
+else
+    echo "[4/5] React Dashboard bundle verified in dashboard/dist."
+fi
+
+# 5. Launch Backend Application Server
+echo "[5/5] Starting Gartika FastAPI & Real-time WebSocket Hub..."
 echo ""
 echo "============================================================"
 echo "                   GARTIKA SYSTEM READY"

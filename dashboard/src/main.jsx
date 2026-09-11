@@ -7,7 +7,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import '../styles.css';
+import './styles/index.css';
 
 // Mount the React Application to the DOM container
 ReactDOM.createRoot(document.getElementById('root') || document.body).render(

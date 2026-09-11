@@ -1,105 +1,270 @@
-/**
- * Root React Application Component for Gartika Urban Intelligence Dashboard.
- * 
- * Manages central dashboard state (statistics, events feed, active buses, work orders),
- * handles periodic data synchronization with the backend REST API, and renders top layout views.
- */
+import React, { useState, useEffect, useCallback } from 'react';
+import { Sidebar } from './components/Sidebar';
+import { TopNav } from './components/TopNav';
+import { DefectDrawer } from './components/DefectDrawer';
+import { CreateWorkOrderModal } from './components/CreateWorkOrderModal';
 
-import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { MetricsBar } from './components/MetricsBar';
-import { BusCard } from './components/BusCard';
-import { WorkOrdersList } from './components/WorkOrdersList';
+import { OverviewPage } from './pages/OverviewPage';
+import { LiveMapPage } from './pages/LiveMapPage';
+import { DefectsPage } from './pages/DefectsPage';
+import { FleetPage } from './pages/FleetPage';
+import { WorkOrdersPage } from './pages/WorkOrdersPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
+import { SettingsPage } from './pages/SettingsPage';
+
 import { api } from './services/api';
+import { wsClient, ConnectionStatus } from './services/websocket';
 
-/**
- * Main App functional component.
- */
 export function App() {
+  const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState({});
   const [events, setEvents] = useState([]);
+  const [defects, setDefects] = useState([]);
+  const [buses, setBuses] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
-  const [bus, setBus] = useState({ bus_id: 'BUS-101', latitude: null, longitude: null, speed: 0.0 });
-  const [sourceMode, setSourceMode] = useState('LIVE');
+  
+  const [selectedDefect, setSelectedDefect] = useState(null);
+  const [workOrderModalDefect, setWorkOrderModalDefect] = useState(null);
+  const [evidenceModalUrl, setEvidenceModalUrl] = useState(null);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [backendHealthy, setBackendHealthy] = useState(true);
+  const [wsStatus, setWsStatus] = useState(ConnectionStatus.CONNECTING);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
-  /**
-   * Set up initial data fetch and periodic synchronization timer upon component mount.
-   */
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 3500);
-    return () => clearInterval(interval);
+  // Fetch all dashboard data from REST API
+  const refreshAllData = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const [healthRes, statsRes, eventsRes, defectsRes, busesRes, woRes] = await Promise.all([
+        api.getHealth().catch(() => null),
+        api.getStats().catch(() => ({})),
+        api.getEvents({ limit: 50 }).catch(() => []),
+        api.getDefects().catch(() => []),
+        api.getBuses().catch(() => []),
+        api.getWorkOrders().catch(() => [])
+      ]);
+
+      setBackendHealthy(Boolean(healthRes));
+      if (statsRes) {
+        setStats(statsRes);
+        if (statsRes.demo_mode !== undefined) setIsDemoMode(statsRes.demo_mode);
+      }
+      if (Array.isArray(eventsRes)) setEvents(eventsRes);
+      if (Array.isArray(defectsRes)) setDefects(defectsRes);
+      if (Array.isArray(busesRes)) setBuses(busesRes);
+      if (Array.isArray(woRes)) setWorkOrders(woRes);
+    } catch (err) {
+      console.warn('[Gartika] Background poll error:', err);
+      setBackendHealthy(false);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, []);
 
-  /**
-   * Query backend endpoints in parallel to refresh stats, events, work orders, and bus position.
-   */
-  const loadData = async () => {
-    try {
-      const [s, e, wo, b] = await Promise.all([
-        api.getStats(),
-        api.getEvents(25),
-        api.getWorkOrders(),
-        api.getBuses()
-      ]);
-      setStats(s);
-      setEvents(e);
-      setWorkOrders(wo);
-      if (b && b.length > 0) setBus(b[0]);
-    } catch (err) {
-      console.warn('Dashboard poll error:', err);
-    }
-  };
+  // Initial mount & WebSocket subscription
+  useEffect(() => {
+    refreshAllData();
 
-  /**
-   * Handle work order status transition (e.g. from OPEN to RESOLVED).
-   * @param {string} woId - Unique work order identifier.
-   * @param {string} newStatus - New status string.
-   */
-  const handleStatusChange = async (woId, newStatus) => {
-    try {
-      await api.updateWorkOrder(woId, { status: newStatus });
-      loadData();
-    } catch (err) {
-      alert(`Error updating work order: ${err.message}`);
-    }
-  };
-
-  /**
-   * Post a synthetic high-severity pothole event for demo and testing purposes.
-   */
-  const handleSeed = async () => {
-    await fetch(`${window.location.origin}/events`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bus_id: 'BUS-101',
-        event_type: 'POTHOLE',
-        confidence: 0.93,
-        latitude: 12.972854,
-        longitude: 77.601243,
-        severity: 'HIGH',
-        location_name: 'Trinity Circle'
-      })
+    // 1. Connect WebSocket
+    wsClient.connect();
+    const unsubStatus = wsClient.subscribeStatus(setWsStatus);
+    const unsubEvents = wsClient.subscribe((msg) => {
+      if (msg.type === 'NEW_EVENT' || msg.event === 'hazard') {
+        const newEvt = msg.data || msg;
+        setEvents((prev) => [newEvt, ...prev.slice(0, 49)]);
+        // If defect payload included, update defects catalog
+        if (newEvt.defect_id || newEvt.id) {
+          setDefects((prev) => {
+            const exists = prev.find(d => (d.id === newEvt.id || d.defect_id === newEvt.defect_id));
+            if (exists) {
+              return prev.map(d => (d.id === newEvt.id || d.defect_id === newEvt.defect_id) ? { ...d, ...newEvt } : d);
+            }
+            return [newEvt, ...prev];
+          });
+        }
+      } else if (msg.type === 'TELEMETRY' || msg.bus_id) {
+        // Update bus telemetry location in fleet state
+        setBuses((prev) => {
+          const busIdx = prev.findIndex(b => b.bus_id === msg.bus_id);
+          if (busIdx >= 0) {
+            const updated = [...prev];
+            updated[busIdx] = { ...updated[busIdx], ...msg, last_seen: new Date().toISOString() };
+            return updated;
+          }
+          return [...prev, { bus_id: msg.bus_id, status: 'ONLINE', ...msg }];
+        });
+      }
     });
-    loadData();
+
+    // 2. Periodic background synchronization (3.5s interval)
+    const pollTimer = setInterval(refreshAllData, 3500);
+
+    return () => {
+      unsubStatus();
+      unsubEvents();
+      wsClient.disconnect();
+      clearInterval(pollTimer);
+    };
+  }, [refreshAllData]);
+
+  // Keyboard shortcut '/' to search
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleExportCsv = () => {
+    window.open(api.getExportCsvUrl(), '_blank');
   };
+
+  const pendingWoCount = workOrders.filter(w => w.status !== 'COMPLETED' && w.status !== 'CLOSED').length;
 
   return (
-    <div className="dashboard-layout">
-      <Header 
-        onOpenPhoneModal={() => {}} 
-        onSeedData={handleSeed}
-        sourceMode={sourceMode}
-        setSourceMode={setSourceMode}
+    <div className="flex h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
+      {/* Navigation Sidebar */}
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        defectCount={defects.length}
+        busCount={buses.length}
+        pendingWorkOrders={pendingWoCount}
       />
-      <MetricsBar stats={stats} />
-      <div className="main-grid">
-        <aside className="left-sidebar">
-          <BusCard bus={bus} sourceMode={sourceMode} setSourceMode={setSourceMode} />
-          <WorkOrdersList workOrders={workOrders} onStatusChange={handleStatusChange} />
-        </aside>
+
+      {/* Main Content Pane */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top Header & Search Bar */}
+        <TopNav
+          wsStatus={wsStatus}
+          backendHealthy={backendHealthy}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          onRefresh={refreshAllData}
+          isRefreshing={isRefreshing}
+          onExportCsv={handleExportCsv}
+          isDemoMode={isDemoMode}
+        />
+
+        {/* Page Container */}
+        <main className="flex-1 overflow-y-auto bg-zinc-950/60 relative">
+          {activeTab === 'overview' && (
+            <OverviewPage
+              stats={stats}
+              events={events}
+              defects={defects}
+              buses={buses}
+              workOrders={workOrders}
+              onSelectDefect={setSelectedDefect}
+              onNavigate={setActiveTab}
+            />
+          )}
+
+          {activeTab === 'map' && (
+            <LiveMapPage
+              defects={defects}
+              buses={buses}
+              selectedDefect={selectedDefect}
+              onSelectDefect={setSelectedDefect}
+            />
+          )}
+
+          {activeTab === 'defects' && (
+            <DefectsPage
+              defects={defects}
+              onSelectDefect={setSelectedDefect}
+              onCreateWorkOrder={setWorkOrderModalDefect}
+              onExportCsv={handleExportCsv}
+            />
+          )}
+
+          {activeTab === 'fleet' && (
+            <FleetPage
+              buses={buses}
+              onSelectBus={(bus) => {
+                setActiveTab('map');
+              }}
+            />
+          )}
+
+          {activeTab === 'work-orders' && (
+            <WorkOrdersPage
+              workOrders={workOrders}
+              onRefresh={refreshAllData}
+              onOpenCreateModal={() => {
+                if (defects.length > 0) {
+                  setWorkOrderModalDefect(defects[0]);
+                } else {
+                  alert('No defects available to issue work order for.');
+                }
+              }}
+            />
+          )}
+
+          {activeTab === 'analytics' && (
+            <AnalyticsPage
+              stats={stats}
+              onExportCsv={handleExportCsv}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsPage
+              isDemoMode={isDemoMode}
+            />
+          )}
+        </main>
       </div>
+
+      {/* Slide-over Defect Details Drawer */}
+      {selectedDefect && (
+        <DefectDrawer
+          defect={selectedDefect}
+          onClose={() => setSelectedDefect(null)}
+          onCreateWorkOrder={(d) => {
+            setSelectedDefect(null);
+            setWorkOrderModalDefect(d);
+          }}
+          onOpenEvidenceModal={setEvidenceModalUrl}
+        />
+      )}
+
+      {/* Create Work Order Modal */}
+      {workOrderModalDefect && (
+        <CreateWorkOrderModal
+          defect={workOrderModalDefect}
+          onClose={() => setWorkOrderModalDefect(null)}
+          onSuccess={() => {
+            refreshAllData();
+          }}
+        />
+      )}
+
+      {/* Full-screen Evidence Photo Viewer Modal */}
+      {evidenceModalUrl && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-md animate-in fade-in duration-150"
+          onClick={() => setEvidenceModalUrl(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
+            <img 
+              src={evidenceModalUrl} 
+              alt="Optical Evidence Full Resolution" 
+              className="max-w-full max-h-[85vh] object-contain"
+            />
+            <div className="p-3 bg-zinc-900 border-t border-zinc-800 text-center font-mono text-xs text-zinc-300">
+              High-Resolution Edge Dashcam Evidence Crop
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

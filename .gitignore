@@ -28,6 +28,8 @@ data/videos/*.mp4
 !data/videos/.gitkeep
 
 # Build artifacts & distributions
+node_modules/
+dashboard/node_modules/
 dashboard/dist/
 mobile/dist/
 dist/

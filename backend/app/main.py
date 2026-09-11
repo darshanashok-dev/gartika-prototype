@@ -131,23 +131,17 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
         logger.warning(f"[WS] Exception in client websocket: {e}")
         manager.disconnect(websocket)
 
-# Check if dashboard dist exists, else fallback to dynamic docs
+# Serve built React dashboard from dashboard/dist
 if settings.DASHBOARD_DIST.exists():
-    @app.api_route("/styles.css", methods=["GET", "HEAD"], include_in_schema=False)
-    def get_root_styles():
-        """Serve root stylesheet for the web dashboard."""
-        return FileResponse(settings.DASHBOARD_DIST / "styles.css", media_type="text/css")
-
-    @app.api_route("/app.js", methods=["GET", "HEAD"], include_in_schema=False)
-    def get_root_app_js():
-        """Serve root client JavaScript application for the web dashboard."""
-        return FileResponse(settings.DASHBOARD_DIST / "app.js", media_type="application/javascript")
+    assets_dir = settings.DASHBOARD_DIST / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     app.mount("/dashboard", StaticFiles(directory=str(settings.DASHBOARD_DIST), html=True), name="dashboard")
     
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     def root():
-        """Serve root landing page (command center dashboard)."""
+        """Serve root landing page (Vite React operations dashboard)."""
         return FileResponse(settings.DASHBOARD_DIST / "index.html")
 else:
     @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
