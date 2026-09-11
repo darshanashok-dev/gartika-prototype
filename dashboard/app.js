@@ -1,624 +1,1066 @@
 /**
- * Gartika Urban Intelligence Command Center — Clean Client Engine.
+ * Gartika Enterprise Command Center & Urban Fleet Intelligence Client Engine.
  * 
- * Interactive GIS mapping, real-time mobile GPS tracking, live camera preview,
- * AI defect stream ingestion via WebSockets, and municipal work order dispatching.
+ * Manages GIS mapping, real-time WebSocket telemetry & defect stream ingestion,
+ * multi-modal sensor fusion visualization, work order dispatching, and data export.
  */
-class GartikaCommandCenter {
+
+class GartikaDashboardApp {
   constructor() {
     this.backendUrl = window.location.origin;
-    this.wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/events`;
+    this.wsUrl = (window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/events';
     
-    // Core Application State
-    this.busLocation = null;
+    // Core State
+    this.activePage = 'overview';
+    this.stats = null;
+    this.buses = [];
+    this.defects = [];
     this.events = [];
     this.workOrders = [];
-    this.selectedEvent = null;
-    this.activeFeedFilter = 'ALL';
-    this.map = null;
-    this.busMarker = null;
-    this.busRoutePolyline = null;
-    this.busTrail = [];
-    this.eventMarkers = {};
+    this.selectedDefect = null;
+    this.selectedBus = null;
+    
+    // GIS Maps & Layers
+    this.miniMap = null;
+    this.fullMap = null;
+    this.miniMarkers = { buses: {}, defects: {} };
+    this.fullMarkers = { buses: {}, defects: {}, workOrders: {} };
+    this.busTrails = {};
+    
+    // WebSocket & Polling
     this.ws = null;
-    this.localIp = window.location.hostname || 'localhost';
-    this.isFirstGpsLock = true;
-
-    this.initElements();
-    this.initMap();
-    this.initWebSocket();
-    this.bindEvents();
-    this.loadInitialData();
-    this.startLiveStreamPolling();
-
-    // Background sync every 4 seconds
-    setInterval(() => this.pollUpdates(), 4000);
+    this.wsReconnectTimer = null;
+    this.reconnectAttempts = 0;
+    this.notifications = [];
+    
+    // Settings
+    this.authToken = localStorage.getItem('gartika_auth_token') || '';
+    
+    this.init();
   }
 
-  initElements() {
-    // KPI Counters
-    this.metricActiveBuses = document.getElementById('metricActiveBuses');
-    this.metricBusId = document.getElementById('metricBusId');
-    this.metricBusBadge = document.getElementById('metricBusBadge');
-    this.metricRoadDefects = document.getElementById('metricRoadDefects');
-    this.metricVehicles = document.getElementById('metricVehicles');
-    this.metricHighPriority = document.getElementById('metricHighPriority');
+  async init() {
+    this.bindDOM();
+    this.initNavigation();
+    this.initMaps();
+    this.initWebSocket();
+    this.bindGlobalEvents();
+    
+    // Load Initial Data
+    await this.refreshAllData();
+    this.renderSettingsQr();
+    
+    // Regular background synchronization
+    setInterval(() => this.pollBackgroundData(), 5000);
+  }
 
-    // Telemetry HUD
-    this.teleLat = document.getElementById('teleLat');
-    this.teleLon = document.getElementById('teleLon');
-    this.teleSpeed = document.getElementById('teleSpeed');
-    this.imuValStatus = document.getElementById('imuValStatus');
-    this.hudBusTag = document.getElementById('hudBusTag');
-    this.streamFpsChip = document.getElementById('streamFpsChip');
-
-    // Camera Stream
-    this.liveStreamImg = document.getElementById('liveStreamImg');
-    this.streamPlaceholder = document.getElementById('streamPlaceholder');
-    this.streamOverlayBadge = document.getElementById('streamOverlayBadge');
-
-    // Feed and Containers
-    this.eventFeedScroll = document.getElementById('eventFeedScroll');
-    this.woItemsContainer = document.getElementById('woItemsContainer');
-    this.woFilterSelect = document.getElementById('woFilterSelect');
+  bindDOM() {
+    // Navigation & Shell
+    this.sidebar = document.getElementById('mainSidebar');
+    this.btnToggleSidebar = document.getElementById('btnToggleSidebar');
+    this.topbarPageTitle = document.getElementById('topbarPageTitle');
+    this.topbarPageSubtitle = document.getElementById('topbarPageSubtitle');
+    this.globalSearchInput = document.getElementById('globalSearchInput');
+    this.statusDot = document.getElementById('statusDot');
+    this.statusText = document.getElementById('statusText');
+    
+    // Notification Drawer
+    this.btnNotificationBell = document.getElementById('btnNotificationBell');
+    this.notificationDrawer = document.getElementById('notificationDrawer');
+    this.notificationCount = document.getElementById('notificationCount');
+    this.notificationList = document.getElementById('notificationList');
+    this.btnClearNotifications = document.getElementById('btnClearNotifications');
+    
+    // Toast Container
     this.toastContainer = document.getElementById('toastContainer');
+    
+    // KPI Elements
+    this.kpiActiveBuses = document.getElementById('kpiActiveBuses');
+    this.kpiTotalBuses = document.getElementById('kpiTotalBuses');
+    this.kpiTotalDefects = document.getElementById('kpiTotalDefects');
+    this.kpiPotholeCount = document.getElementById('kpiPotholeCount');
+    this.kpiVerifiedDefects = document.getElementById('kpiVerifiedDefects');
+    this.kpiVerificationRate = document.getElementById('kpiVerificationRate');
+    this.kpiOpenWorkOrders = document.getElementById('kpiOpenWorkOrders');
+    this.kpiResolvedWorkOrders = document.getElementById('kpiResolvedWorkOrders');
+    
+    // Nav Counter Pills
+    this.navMapCount = document.getElementById('navMapCount');
+    this.navDefectsCount = document.getElementById('navDefectsCount');
+    this.navBusCount = document.getElementById('navBusCount');
+    this.navWoCount = document.getElementById('navWoCount');
+    
+    // Feeds & Cameras
+    this.overviewEventFeed = document.getElementById('overviewEventFeed');
+    this.overviewCameraImg = document.getElementById('overviewCameraImg');
+    this.overviewCameraPlaceholder = document.getElementById('overviewCameraPlaceholder');
+    this.hudSpeedVal = document.getElementById('hudSpeedVal');
+    this.hudCoordsVal = document.getElementById('hudCoordsVal');
+    this.hudImuVal = document.getElementById('hudImuVal');
+    
+    // Tables & Grids
+    this.defectsTableBody = document.getElementById('defectsTableBody');
+    this.fleetGridContainer = document.getElementById('fleetGridContainer');
+    this.workOrdersContainer = document.getElementById('workOrdersContainer');
+    
+    // Filters
+    this.filterDefectType = document.getElementById('filterDefectType');
+    this.filterDefectSeverity = document.getElementById('filterDefectSeverity');
+    this.filterDefectStatus = document.getElementById('filterDefectStatus');
+    this.filterDefectSearch = document.getElementById('filterDefectSearch');
+    
+    // Export Buttons
+    this.btnExportCsv = document.getElementById('btnExportCsv');
+    this.btnExportJson = document.getElementById('btnExportJson');
+    
+    // Drawers & Modals
+    this.detailDrawer = document.getElementById('detailDrawer');
+    this.detailDrawerOverlay = document.getElementById('detailDrawerOverlay');
+    this.btnDrawerClose = document.getElementById('btnDrawerClose');
+    this.drawerTitle = document.getElementById('drawerTitle');
+    this.drawerTag = document.getElementById('drawerTag');
+    this.drawerBody = document.getElementById('drawerBody');
+    this.drawerFooter = document.getElementById('drawerFooter');
+    
+    this.createWoModal = document.getElementById('createWoModal');
+    this.btnCloseWoModal = document.getElementById('btnCloseWoModal');
+    this.btnCancelWoModal = document.getElementById('btnCancelWoModal');
+    this.btnSubmitWoModal = document.getElementById('btnSubmitWoModal');
+    this.woModalDefectId = document.getElementById('woModalDefectId');
+    this.woModalPriority = document.getElementById('woModalPriority');
+    this.woModalAssignee = document.getElementById('woModalAssignee');
+    this.woModalNotes = document.getElementById('woModalNotes');
+  }
 
-    // Modals
-    this.eventModal = document.getElementById('eventModal');
-    this.modalSeverityTag = document.getElementById('modalSeverityTag');
-    this.modalEventTitle = document.getElementById('modalEventTitle');
-    this.modalEventId = document.getElementById('modalEventId');
-    this.modalEvidenceImg = document.getElementById('modalEvidenceImg');
-    this.modalEvidenceFallback = document.getElementById('modalEvidenceFallback');
-    this.modalEventType = document.getElementById('modalEventType');
-    this.modalConfidence = document.getElementById('modalConfidence');
-    this.modalBusId = document.getElementById('modalBusId');
-    this.modalLocation = document.getElementById('modalLocation');
-    this.modalTimestamp = document.getElementById('modalTimestamp');
-    this.modalVibration = document.getElementById('modalVibration');
-    this.btnCreateWorkOrder = document.getElementById('btnCreateWorkOrder');
+  /* --------------------------------------------------------------------------
+     Navigation & Routing Shell
+     -------------------------------------------------------------------------- */
+  initNavigation() {
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const targetPage = item.getAttribute('data-page');
+        if (targetPage) this.switchPage(targetPage);
+      });
+    });
 
-    // Phone Pairing Modal
-    this.phoneModal = document.getElementById('phoneModal');
-    this.mobileConnectUrl = document.getElementById('mobileConnectUrl');
-    this.qrCodeContainer = document.getElementById('qrCodeContainer');
+    if (this.btnToggleSidebar) {
+      this.btnToggleSidebar.addEventListener('click', () => {
+        this.sidebar.classList.toggle('collapsed');
+      });
+    }
 
-    // Live Status Badge
-    this.wsStatusDot = document.getElementById('wsStatusDot');
-    this.liveStatusText = document.getElementById('liveStatusText');
+    const btnOverviewExpandMap = document.getElementById('btnOverviewExpandMap');
+    if (btnOverviewExpandMap) {
+      btnOverviewExpandMap.addEventListener('click', () => this.switchPage('live-map'));
+    }
+
+    const btnSidebarConnectPhone = document.getElementById('btnSidebarConnectPhone');
+    if (btnSidebarConnectPhone) {
+      btnSidebarConnectPhone.addEventListener('click', () => this.switchPage('settings'));
+    }
+
+    const btnPairNewBus = document.getElementById('btnPairNewBus');
+    if (btnPairNewBus) {
+      btnPairNewBus.addEventListener('click', () => this.switchPage('settings'));
+    }
+  }
+
+  switchPage(pageId) {
+    this.activePage = pageId;
+
+    // Update active nav item
+    document.querySelectorAll('.nav-item').forEach(item => {
+      if (item.getAttribute('data-page') === pageId) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+
+    // Update active section
+    document.querySelectorAll('.page-section').forEach(section => {
+      section.classList.remove('active');
+    });
+
+    const targetSection = document.getElementById('page-' + pageId);
+    if (targetSection) {
+      targetSection.classList.add('active');
+    }
+
+    // Update header titles
+    const titles = {
+      'overview': ['Overview', 'Live Urban Intelligence & Sensing Network'],
+      'live-map': ['Live GIS Map', 'Geographic Visualization of Fleet & Road Distress'],
+      'defects': ['Road Defects', 'Spatially Deduplicated Surface Incidents'],
+      'fleet': ['Fleet Sensing', 'Active Transit Vehicles Outfitted with Edge Units'],
+      'work-orders': ['Work Orders', 'Closed-Loop Road Maintenance Dispatch & Auditing'],
+      'analytics': ['Analytics & Audit', 'Edge Transmission & Sensor Corroboration Benchmarks'],
+      'settings': ['Settings & Setup', 'Server Endpoints, Token Authentication & Mobile Pairing']
+    };
+
+    if (titles[pageId]) {
+      this.topbarPageTitle.textContent = titles[pageId][0];
+      this.topbarPageSubtitle.textContent = titles[pageId][1];
+    }
+
+    // Invalidate map size when switching to map view
+    if (pageId === 'live-map' && this.fullMap) {
+      setTimeout(() => {
+        this.fullMap.invalidateSize();
+        this.fitMapToFleet();
+      }, 150);
+    } else if (pageId === 'overview' && this.miniMap) {
+      setTimeout(() => this.miniMap.invalidateSize(), 150);
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     GIS Map Initialization & Rendering
+     -------------------------------------------------------------------------- */
+  initMaps() {
+    const defaultCenter = [12.9716, 77.5946];
+
+    // 1. Overview Mini Map
+    const miniMapEl = document.getElementById('overviewMiniMap');
+    if (miniMapEl && typeof L !== 'undefined') {
+      this.miniMap = L.map('overviewMiniMap', {
+        center: defaultCenter,
+        zoom: 13,
+        zoomControl: false,
+        attributionControl: false
+      });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+      }).addTo(this.miniMap);
+    }
+
+    // 2. Full GIS Map
+    const fullMapEl = document.getElementById('fullGisMap');
+    if (fullMapEl && typeof L !== 'undefined') {
+      this.fullMap = L.map('fullGisMap', {
+        center: defaultCenter,
+        zoom: 14,
+        zoomControl: true,
+        attributionControl: true
+      });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        attribution: '&copy; CartoDB &copy; OpenStreetMap contributors'
+      }).addTo(this.fullMap);
+
+      // Layer Toggles
+      const layerBuses = document.getElementById('layerBuses');
+      const layerDefects = document.getElementById('layerDefects');
+      const layerWorkOrders = document.getElementById('layerWorkOrders');
+      
+      const toggleLayers = () => {
+        const showB = layerBuses ? layerBuses.checked : true;
+        const showD = layerDefects ? layerDefects.checked : true;
+        const showW = layerWorkOrders ? layerWorkOrders.checked : true;
+
+        Object.values(this.fullMarkers.buses).forEach(m => showB ? m.addTo(this.fullMap) : m.remove());
+        Object.values(this.fullMarkers.defects).forEach(m => showD ? m.addTo(this.fullMap) : m.remove());
+        Object.values(this.fullMarkers.workOrders).forEach(m => showW ? m.addTo(this.fullMap) : m.remove());
+      };
+
+      if (layerBuses) layerBuses.addEventListener('change', toggleLayers);
+      if (layerDefects) layerDefects.addEventListener('change', toggleLayers);
+      if (layerWorkOrders) layerWorkOrders.addEventListener('change', toggleLayers);
+
+      const btnMapFitFleet = document.getElementById('btnMapFitFleet');
+      if (btnMapFitFleet) {
+        btnMapFitFleet.addEventListener('click', () => this.fitMapToFleet());
+      }
+
+      const btnMapRefresh = document.getElementById('btnMapRefresh');
+      if (btnMapRefresh) {
+        btnMapRefresh.addEventListener('click', () => {
+          this.refreshAllData();
+          this.showToast('Map data synchronized.', 'success');
+        });
+      }
+    }
+  }
+
+  fitMapToFleet() {
+    if (!this.fullMap) return;
+    const latlngs = [];
+    this.buses.forEach(b => {
+      if (b.latitude && b.longitude) latlngs.push([b.latitude, b.longitude]);
+    });
+    this.defects.forEach(d => {
+      if (d.latitude && d.longitude) latlngs.push([d.latitude, d.longitude]);
+    });
+    if (latlngs.length > 0) {
+      this.fullMap.fitBounds(latlngs, { padding: [40, 40], maxZoom: 16 });
+    }
+  }
+
+  updateMapMarkers() {
+    if (typeof L === 'undefined') return;
+
+    // 1. Update Bus Markers
+    this.buses.forEach(bus => {
+      if (!bus.latitude || !bus.longitude) return;
+
+      const busIcon = L.divIcon({
+        className: 'custom-bus-marker',
+        html: '<div style="background:#0284c7; border:2px solid #38bdf8; color:#fff; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; box-shadow:0 0 10px rgba(56,189,248,0.6);">BUS</div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+
+      // Full Map
+      if (this.fullMap) {
+        if (!this.fullMarkers.buses[bus.bus_id]) {
+          const marker = L.marker([bus.latitude, bus.longitude], { icon: busIcon }).addTo(this.fullMap);
+          marker.on('click', () => this.openBusDrawer(bus));
+          this.fullMarkers.buses[bus.bus_id] = marker;
+        } else {
+          this.fullMarkers.buses[bus.bus_id].setLatLng([bus.latitude, bus.longitude]);
+        }
+      }
+
+      // Mini Map
+      if (this.miniMap) {
+        if (!this.miniMarkers.buses[bus.bus_id]) {
+          const marker = L.marker([bus.latitude, bus.longitude], { icon: busIcon }).addTo(this.miniMap);
+          this.miniMarkers.buses[bus.bus_id] = marker;
+        } else {
+          this.miniMarkers.buses[bus.bus_id].setLatLng([bus.latitude, bus.longitude]);
+        }
+      }
+    });
+
+    // 2. Update Defect Markers
+    this.defects.forEach(defect => {
+      if (!defect.latitude || !defect.longitude) return;
+
+      let color = '#f59e0b';
+      if (defect.severity === 'CRITICAL') color = '#f43f5e';
+      else if (defect.severity === 'HIGH') color = '#fb7185';
+      else if (defect.status === 'CLOSED' || defect.repair_status === 'REPAIR_VERIFIED') color = '#10b981';
+
+      const defectIcon = L.divIcon({
+        className: 'custom-defect-marker',
+        html: '<div style="background:' + color + '; border:2px solid #fff; width:18px; height:18px; border-radius:50%; box-shadow:0 0 8px ' + color + ';"></div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+      });
+
+      if (this.fullMap) {
+        if (!this.fullMarkers.defects[defect.defect_id]) {
+          const marker = L.marker([defect.latitude, defect.longitude], { icon: defectIcon }).addTo(this.fullMap);
+          marker.on('click', () => this.openDefectDrawer(defect));
+          this.fullMarkers.defects[defect.defect_id] = marker;
+        } else {
+          this.fullMarkers.defects[defect.defect_id].setLatLng([defect.latitude, defect.longitude]);
+        }
+      }
+
+      if (this.miniMap) {
+        if (!this.miniMarkers.defects[defect.defect_id]) {
+          const marker = L.marker([defect.latitude, defect.longitude], { icon: defectIcon }).addTo(this.miniMap);
+          this.miniMarkers.defects[defect.defect_id] = marker;
+        } else {
+          this.miniMarkers.defects[defect.defect_id].setLatLng([defect.latitude, defect.longitude]);
+        }
+      }
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     REST API Operations
+     -------------------------------------------------------------------------- */
+  async apiRequest(endpoint, options = {}) {
+    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    if (this.authToken) {
+      headers['X-API-Key'] = this.authToken;
+      headers['Authorization'] = 'Bearer ' + this.authToken;
+    }
+    try {
+      const res = await fetch(this.backendUrl + endpoint, { ...options, headers });
+      if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+      return await res.json();
+    } catch (err) {
+      console.warn('[API] ' + endpoint + ' failed:', err);
+      return null;
+    }
+  }
+
+  async refreshAllData() {
+    await Promise.all([
+      this.fetchStats(),
+      this.fetchBuses(),
+      this.fetchDefects(),
+      this.fetchEvents(),
+      this.fetchWorkOrders()
+    ]);
+    this.updateMapMarkers();
+  }
+
+  async pollBackgroundData() {
+    await Promise.all([
+      this.fetchStats(),
+      this.fetchBuses(),
+      this.fetchDefects()
+    ]);
+    this.updateMapMarkers();
+  }
+
+  async fetchStats() {
+    const data = await this.apiRequest('/api/v1/stats') || await this.apiRequest('/stats');
+    if (!data) return;
+    this.stats = data;
+
+    const totalDefects = data.total_defects || 0;
+    const verifiedDefects = data.verified_defects || 0;
+    const activeBuses = data.active_buses || 0;
+    const totalBuses = data.total_buses || activeBuses;
+    const openWos = data.open_work_orders || 0;
+
+    if (this.kpiActiveBuses) this.kpiActiveBuses.textContent = activeBuses;
+    if (this.kpiTotalBuses) this.kpiTotalBuses.textContent = '/ ' + totalBuses + ' Total';
+    if (this.kpiTotalDefects) this.kpiTotalDefects.textContent = totalDefects;
+    if (this.kpiVerifiedDefects) this.kpiVerifiedDefects.textContent = verifiedDefects;
+    if (this.kpiOpenWorkOrders) this.kpiOpenWorkOrders.textContent = openWos;
+
+    if (this.kpiVerificationRate) {
+      const rate = totalDefects > 0 ? Math.round((verifiedDefects / totalDefects) * 100) : 90;
+      this.kpiVerificationRate.textContent = rate + '%';
+    }
+  }
+
+  async fetchBuses() {
+    const data = await this.apiRequest('/api/v1/buses') || await this.apiRequest('/buses');
+    if (!data || !Array.isArray(data)) return;
+    this.buses = data;
+    if (this.navBusCount) this.navBusCount.textContent = data.length;
+    this.renderFleetGrid();
+    
+    if (data.length > 0) {
+      const b = data[0];
+      if (this.hudSpeedVal) this.hudSpeedVal.textContent = (b.speed || 0).toFixed(1) + ' km/h';
+      if (this.hudCoordsVal) {
+        this.hudCoordsVal.textContent = (b.latitude && b.longitude) 
+          ? b.latitude.toFixed(4) + ', ' + b.longitude.toFixed(4) 
+          : 'NO GPS LOCK';
+      }
+    }
+  }
+
+  async fetchDefects() {
+    const data = await this.apiRequest('/api/v1/defects') || await this.apiRequest('/defects');
+    if (!data || !Array.isArray(data)) return;
+    this.defects = data;
+    if (this.navDefectsCount) this.navDefectsCount.textContent = data.length;
+    if (this.navMapCount) this.navMapCount.textContent = data.length;
+    if (this.kpiPotholeCount) {
+      const potholes = data.filter(d => d.defect_type === 'POTHOLE').length;
+      this.kpiPotholeCount.textContent = potholes + ' Potholes';
+    }
+    this.renderDefectsTable();
+  }
+
+  async fetchEvents() {
+    const data = await this.apiRequest('/api/v1/events?limit=25') || await this.apiRequest('/events?limit=25');
+    if (!data || !Array.isArray(data)) return;
+    this.events = data;
+    this.renderOverviewEventFeed();
+  }
+
+  async fetchWorkOrders() {
+    const data = await this.apiRequest('/api/v1/work-orders') || await this.apiRequest('/work-orders');
+    if (!data || !Array.isArray(data)) return;
+    this.workOrders = data;
+    if (this.navWoCount) this.navWoCount.textContent = data.length;
+    if (this.kpiResolvedWorkOrders) {
+      const resolved = data.filter(w => w.status === 'RESOLVED').length;
+      this.kpiResolvedWorkOrders.textContent = resolved + ' Resolved';
+    }
+    this.renderWorkOrders();
+  }
+
+  /* --------------------------------------------------------------------------
+     WebSocket Real-Time Gateway
+     -------------------------------------------------------------------------- */
+  initWebSocket() {
+    try {
+      const wsUri = this.authToken ? this.wsUrl + '?token=' + encodeURIComponent(this.authToken) : this.wsUrl;
+      this.ws = new WebSocket(wsUri);
+
+      this.ws.onopen = () => {
+        this.reconnectAttempts = 0;
+        this.statusDot.className = 'status-dot live';
+        this.statusText.textContent = 'CONNECTED';
+      };
+
+      this.ws.onmessage = (msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          this.handleRealTimeEvent(data);
+        } catch (e) {
+          // Heartbeat ping/pong
+        }
+      };
+
+      this.ws.onclose = () => {
+        this.statusDot.className = 'status-dot';
+        this.statusText.textContent = 'RECONNECTING...';
+        this.scheduleWsReconnect();
+      };
+
+      this.ws.onerror = () => {
+        this.ws.close();
+      };
+    } catch (e) {
+      this.scheduleWsReconnect();
+    }
+  }
+
+  scheduleWsReconnect() {
+    if (this.wsReconnectTimer) clearTimeout(this.wsReconnectTimer);
+    const delay = Math.min(10000, 1500 * Math.pow(1.5, this.reconnectAttempts++));
+    this.wsReconnectTimer = setTimeout(() => this.initWebSocket(), delay);
+  }
+
+  handleRealTimeEvent(evt) {
+    if (!evt) return;
+
+    if (evt.type === 'DEFECT_DETECTED' || evt.event_type || evt.defect_id) {
+      this.events.unshift({
+        id: evt.id || Date.now(),
+        event_type: evt.event_type || 'POTHOLE',
+        severity: evt.severity || 'HIGH',
+        bus_id: evt.bus_id || 'BUS-101',
+        confidence: evt.confidence || evt.final_confidence || 0.88,
+        latitude: evt.latitude,
+        longitude: evt.longitude,
+        timestamp: new Date().toISOString()
+      });
+      if (this.events.length > 50) this.events.pop();
+      this.renderOverviewEventFeed();
+      this.fetchStats();
+      this.fetchDefects();
+
+      if (evt.severity === 'CRITICAL' || evt.severity === 'HIGH') {
+        this.addNotification({
+          title: 'High-Severity Defect: ' + (evt.event_type || 'POTHOLE'),
+          desc: 'Reported by ' + (evt.bus_id || 'BUS-101') + ' (Confidence: ' + Math.round((evt.confidence || 0.88)*100) + '%)',
+          level: evt.severity === 'CRITICAL' ? 'critical' : 'warning'
+        });
+      }
+    } else if (evt.type === 'FRAME_PREVIEW' && evt.image_base64) {
+      if (this.overviewCameraImg) {
+        this.overviewCameraImg.src = 'data:image/jpeg;base64,' + evt.image_base64;
+        this.overviewCameraImg.classList.remove('hidden');
+        if (this.overviewCameraPlaceholder) this.overviewCameraPlaceholder.classList.add('hidden');
+      }
+    }
+  }
+
+  addNotification(notif) {
+    this.notifications.unshift({ ...notif, time: new Date() });
+    if (this.notifications.length > 20) this.notifications.pop();
+    this.renderNotifications();
+  }
+
+  renderNotifications() {
+    if (!this.notificationList || !this.notificationCount) return;
+    this.notificationCount.textContent = this.notifications.length;
+    if (this.notifications.length === 0) {
+      this.notificationList.innerHTML = '<div class="notification-empty">No active critical alerts. Sensing network healthy.</div>';
+      return;
+    }
+    this.notificationList.innerHTML = this.notifications.map(n => 
+      '<div class="notif-item ' + (n.level || 'warning') + '">' +
+        '<div class="font-semibold text-slate-100">' + n.title + '</div>' +
+        '<div class="text-slate-400 text-xs">' + n.desc + '</div>' +
+      '</div>'
+    ).join('');
+  }
+
+  /* --------------------------------------------------------------------------
+     DOM Renderers: Feed, Defects, Fleet, Work Orders
+     -------------------------------------------------------------------------- */
+  renderOverviewEventFeed() {
+    if (!this.overviewEventFeed) return;
+    if (this.events.length === 0) {
+      this.overviewEventFeed.innerHTML = '<div class="loading-state-clean"><span>No recent events. Ready to sense roadway.</span></div>';
+      return;
+    }
+
+    this.overviewEventFeed.innerHTML = this.events.slice(0, 15).map(evt => {
+      let dotClass = 'pothole';
+      if (evt.event_type === 'TELEMETRY') dotClass = 'telemetry';
+      else if (evt.event_type === 'MULTI_BUS_VERIFIED') dotClass = 'corroborated';
+      else if (evt.event_type === 'REPAIR_VERIFIED') dotClass = 'repair';
+
+      const confPct = Math.round((evt.confidence || 0.85) * 100);
+      const timeStr = new Date(evt.timestamp).toLocaleTimeString();
+
+      return '<div class="event-feed-item">' +
+        '<span class="event-dot ' + dotClass + '"></span>' +
+        '<div class="event-details">' +
+          '<div class="event-title-row">' +
+            '<span class="event-title">' + (evt.event_type || 'ROAD HAZARD') + '</span>' +
+            '<span class="event-time font-mono">' + timeStr + '</span>' +
+          '</div>' +
+          '<div class="event-meta">' +
+            '<span class="text-slate-300 font-mono">' + (evt.bus_id || 'BUS-101') + '</span> &bull; ' +
+            '<span class="text-blue-400 font-mono">' + confPct + '% Conf</span> &bull; ' +
+            '<span class="badge-sev ' + ((evt.severity || 'HIGH').toLowerCase()) + '">' + (evt.severity || 'HIGH') + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  renderDefectsTable() {
+    if (!this.defectsTableBody) return;
+    
+    const typeF = this.filterDefectType ? this.filterDefectType.value : 'ALL';
+    const sevF = this.filterDefectSeverity ? this.filterDefectSeverity.value : 'ALL';
+    const statusF = this.filterDefectStatus ? this.filterDefectStatus.value : 'ALL';
+    const searchF = this.filterDefectSearch ? this.filterDefectSearch.value.trim().toLowerCase() : '';
+
+    const filtered = this.defects.filter(d => {
+      if (typeF !== 'ALL' && d.defect_type !== typeF) return false;
+      if (sevF !== 'ALL' && d.severity !== sevF) return false;
+      if (statusF !== 'ALL' && d.status !== statusF && d.repair_status !== statusF) return false;
+      if (searchF) {
+        const text = (d.defect_id + ' ' + (d.location_name || '') + ' ' + (d.verifying_buses || '')).toLowerCase();
+        if (!text.includes(searchF)) return false;
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      this.defectsTableBody.innerHTML = '<tr><td colspan="10" class="text-center text-slate-400 py-6">No road defects match the selected filters.</td></tr>';
+      return;
+    }
+
+    this.defectsTableBody.innerHTML = filtered.map(d => {
+      const confPct = Math.round((d.best_confidence || 0.85) * 100);
+      const sevClass = (d.severity || 'HIGH').toLowerCase();
+      
+      let statusBadge = '<span class="badge-status suspected">SUSPECTED</span>';
+      if (d.status === 'CLOSED' || d.repair_status === 'REPAIR_VERIFIED') {
+        statusBadge = '<span class="badge-status verified">VERIFIED REPAIRED</span>';
+      } else if (d.status === 'MULTI_BUS_VERIFIED') {
+        statusBadge = '<span class="badge-status verified">MULTI-BUS VERIFIED</span>';
+      } else if (d.status === 'SENSOR_FUSED') {
+        statusBadge = '<span class="badge-status fused">SENSOR FUSED</span>';
+      } else if (d.status === 'DETECTED') {
+        statusBadge = '<span class="badge-status detected">DETECTED</span>';
+      } else if (d.status === 'REPAIR_FAILED') {
+        statusBadge = '<span class="badge-status failed">REPAIR FAILED</span>';
+      }
+
+      const coords = (d.latitude && d.longitude) ? d.latitude.toFixed(4) + ', ' + d.longitude.toFixed(4) : '<span class="text-amber-400">NO GPS LOCK</span>';
+      const lastSeen = d.last_seen ? new Date(d.last_seen).toLocaleTimeString() : '--';
+
+      return '<tr data-defect-id="' + d.defect_id + '">' +
+        '<td class="font-mono font-bold text-slate-100">' + d.defect_id + '</td>' +
+        '<td><span class="font-semibold text-slate-200">' + d.defect_type + '</span></td>' +
+        '<td><span class="badge-sev ' + sevClass + '">' + d.severity + '</span></td>' +
+        '<td><span class="font-mono font-bold text-blue-400">' + confPct + '%</span></td>' +
+        '<td class="font-mono text-xs">' + coords + '</td>' +
+        '<td class="font-mono text-center">' + (d.observation_count || 1) + '</td>' +
+        '<td class="font-mono text-xs text-slate-300">' + (d.unique_bus_count || 1) + ' Units</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td class="font-mono text-xs text-slate-400">' + lastSeen + '</td>' +
+        '<td class="text-right">' +
+          '<button class="btn-xs btn-secondary btn-view-defect" data-defect-id="' + d.defect_id + '">Details</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    this.defectsTableBody.querySelectorAll('tr').forEach(row => {
+      row.addEventListener('click', () => {
+        const id = row.getAttribute('data-defect-id');
+        const defect = this.defects.find(x => x.defect_id === id);
+        if (defect) this.openDefectDrawer(defect);
+      });
+    });
+  }
+
+  renderFleetGrid() {
+    if (!this.fleetGridContainer) return;
+    if (this.buses.length === 0) {
+      this.fleetGridContainer.innerHTML = '<div class="loading-state-clean"><span>No transit units registered yet. Connect mobile phone to pair.</span></div>';
+      return;
+    }
+
+    this.fleetGridContainer.innerHTML = this.buses.map(b => {
+      const isOnline = b.status === 'ACTIVE';
+      const speed = (b.speed || 0).toFixed(1);
+      const coords = (b.latitude && b.longitude) ? b.latitude.toFixed(4) + ', ' + b.longitude.toFixed(4) : 'UNKNOWN LOCATION';
+      const lastSeen = b.last_seen ? new Date(b.last_seen).toLocaleTimeString() : 'Just now';
+
+      return '<div class="fleet-card" data-bus-id="' + b.bus_id + '">' +
+        '<div class="fleet-card-header">' +
+          '<span class="fleet-bus-title font-mono">' + b.bus_id + '</span>' +
+          '<span class="badge-status ' + (isOnline ? 'verified' : 'suspected') + '">' + (b.status || 'ACTIVE') + '</span>' +
+        '</div>' +
+        '<div class="grid grid-cols-2 gap-2 text-xs">' +
+          '<div><span class="text-slate-400">Speed:</span> <span class="font-mono text-slate-100">' + speed + ' km/h</span></div>' +
+          '<div><span class="text-slate-400">Last Ping:</span> <span class="font-mono text-slate-100">' + lastSeen + '</span></div>' +
+        '</div>' +
+        '<div class="text-xs text-slate-400">' +
+          '<span>GPS:</span> <span class="font-mono text-slate-200">' + coords + '</span>' +
+        '</div>' +
+        '<div class="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">' +
+          '<span class="text-slate-400">Hardware Sensors:</span>' +
+          '<div class="flex gap-1 font-mono text-[10px]">' +
+            '<span class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">CAM</span>' +
+            '<span class="px-1.5 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">IMU</span>' +
+            '<span class="px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800">GPS</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    this.fleetGridContainer.querySelectorAll('.fleet-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.getAttribute('data-bus-id');
+        const bus = this.buses.find(x => x.bus_id === id);
+        if (bus) this.openBusDrawer(bus);
+      });
+    });
+  }
+
+  renderWorkOrders() {
+    if (!this.workOrdersContainer) return;
+    if (this.workOrders.length === 0) {
+      this.workOrdersContainer.innerHTML = '<div class="loading-state-clean"><span>No active municipal work orders. All road distress repaired.</span></div>';
+      return;
+    }
+
+    this.workOrdersContainer.innerHTML = this.workOrders.map(wo => {
+      const isResolved = wo.status === 'RESOLVED';
+      return '<div class="card flex flex-col gap-3">' +
+        '<div class="flex items-center justify-between">' +
+          '<span class="font-mono font-bold text-indigo-400">' + wo.work_order_id + '</span>' +
+          '<span class="badge-status ' + (isResolved ? 'verified' : 'repair') + '">' + wo.status + '</span>' +
+        '</div>' +
+        '<div class="text-xs text-slate-300">' +
+          '<div><span class="text-slate-400">Linked Defect:</span> <span class="font-mono text-slate-100">' + (wo.defect_id || 'N/A') + '</span></div>' +
+          '<div><span class="text-slate-400">Assigned Crew:</span> <span class="text-slate-100">' + (wo.assigned_contractor || 'Municipal Dispatch') + '</span></div>' +
+          '<div><span class="text-slate-400">Priority:</span> <span class="badge-sev ' + ((wo.priority || 'HIGH').toLowerCase()) + '">' + wo.priority + '</span></div>' +
+        '</div>' +
+        '<div class="text-xs text-slate-400">' +
+          (wo.description || 'Rapid pothole asphalt repair required.') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* --------------------------------------------------------------------------
+     Slide-Over Detail Drawer & Modals
+     -------------------------------------------------------------------------- */
+  openDefectDrawer(d) {
+    this.selectedDefect = d;
+    this.drawerTag.textContent = 'ROAD DEFECT DETAILS';
+    this.drawerTitle.textContent = d.defect_id;
+
+    const confPct = Math.round((d.best_confidence || 0.85) * 100);
+    const coords = (d.latitude && d.longitude) ? d.latitude.toFixed(5) + ', ' + d.longitude.toFixed(5) : 'UNKNOWN LOCATION';
+    const evidenceUrl = d.latest_evidence_path ? this.backendUrl + '/' + d.latest_evidence_path.replace(/^\//, '') : null;
+
+    this.drawerBody.innerHTML = '' +
+      '<div class="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800">' +
+        '<div>' +
+          '<span class="text-xs text-slate-400">Type & Severity</span>' +
+          '<div class="font-bold text-base text-slate-100">' + d.defect_type + ' &bull; <span class="badge-sev ' + ((d.severity||'HIGH').toLowerCase()) + '">' + d.severity + '</span></div>' +
+        '</div>' +
+        '<div class="text-right">' +
+          '<span class="text-xs text-slate-400">Composite Confidence</span>' +
+          '<div class="font-mono font-extrabold text-lg text-blue-400">' + confPct + '%</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="p-3 rounded-lg bg-slate-900 border border-slate-800 flex flex-col gap-2">' +
+        '<span class="text-xs font-bold text-slate-300 tracking-wider">CONFIDENCE BREAKDOWN</span>' +
+        '<div class="grid grid-cols-2 gap-2 text-xs font-mono">' +
+          '<div><span class="text-slate-400">Vision Model:</span> <span class="text-slate-200">' + (d.model_confidence ? (d.model_confidence*100).toFixed(0)+'%' : 'N/A (Heuristic)') + '</span></div>' +
+          '<div><span class="text-slate-400">IMU Shock Score:</span> <span class="text-slate-200">' + (d.imu_score ? (d.imu_score*100).toFixed(0)+'%' : '90%') + '</span></div>' +
+          '<div><span class="text-slate-400">Fusion Score:</span> <span class="text-slate-200">' + (d.fusion_score ? (d.fusion_score*100).toFixed(0)+'%' : confPct+'%') + '</span></div>' +
+          '<div><span class="text-slate-400">Corroboration:</span> <span class="text-emerald-400">' + (d.unique_bus_count || 1) + ' Buses</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex flex-col gap-2">' +
+        '<span class="text-xs font-bold text-slate-300">ANONYMIZED EVIDENCE PHOTO</span>' +
+        '<div class="w-full h-44 rounded-lg bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center">' +
+          (evidenceUrl 
+            ? '<img src="' + evidenceUrl + '" class="w-full h-full object-cover" alt="Evidence" onerror="this.parentElement.innerHTML='<span class=text-slate-500>Evidence thumbnail preview</span>'" />' 
+            : '<span class="text-slate-500 text-xs font-mono">No cropped frame attached</span>') +
+        '</div>' +
+      '</div>' +
+      '<div class="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs flex flex-col gap-1">' +
+        '<span class="font-bold text-slate-300">GNSS TELEMETRY</span>' +
+        '<div class="font-mono text-slate-200">' + coords + '</div>' +
+        '<div class="text-slate-400">' + (d.location_name || 'Urban transit corridor') + '</div>' +
+      '</div>';
+
+    this.drawerFooter.innerHTML = '' +
+      '<button class="btn btn-primary flex-1" id="btnDrawerDispatchWo">' +
+        '<span>Dispatch Work Order</span>' +
+      '</button>';
+
+    document.getElementById('btnDrawerDispatchWo').addEventListener('click', () => {
+      this.closeDrawer();
+      this.openCreateWoModal(d.defect_id);
+    });
+
+    this.showDrawer();
+  }
+
+  openBusDrawer(bus) {
+    this.selectedBus = bus;
+    this.drawerTag.textContent = 'FLEET UNIT TELEMETRY';
+    this.drawerTitle.textContent = bus.bus_id;
+
+    this.drawerBody.innerHTML = '' +
+      '<div class="p-4 rounded-lg bg-slate-900 border border-slate-800 flex flex-col gap-3">' +
+        '<div class="flex justify-between items-center">' +
+          '<span class="text-xs text-slate-400">Status:</span>' +
+          '<span class="badge-status verified">' + (bus.status || 'ACTIVE') + '</span>' +
+        '</div>' +
+        '<div class="flex justify-between items-center">' +
+          '<span class="text-xs text-slate-400">Current Speed:</span>' +
+          '<span class="font-mono font-bold text-slate-100">' + (bus.speed || 0).toFixed(1) + ' km/h</span>' +
+        '</div>' +
+        '<div class="flex justify-between items-center">' +
+          '<span class="text-xs text-slate-400">GNSS Lock:</span>' +
+          '<span class="font-mono text-slate-200">' + (bus.latitude ? bus.latitude.toFixed(5)+', '+bus.longitude.toFixed(5) : 'SEARCHING...') + '</span>' +
+        '</div>' +
+      '</div>';
+
+    this.drawerFooter.innerHTML = '' +
+      '<button class="btn btn-secondary flex-1" id="btnDrawerCloseBus">Close</button>';
+    document.getElementById('btnDrawerCloseBus').addEventListener('click', () => this.closeDrawer());
+
+    this.showDrawer();
+  }
+
+  showDrawer() {
+    this.detailDrawer.classList.remove('hidden');
+    this.detailDrawerOverlay.classList.remove('hidden');
+  }
+
+  closeDrawer() {
+    this.detailDrawer.classList.add('hidden');
+    this.detailDrawerOverlay.classList.add('hidden');
+  }
+
+  /* --------------------------------------------------------------------------
+     Work Order Dispatching
+     -------------------------------------------------------------------------- */
+  openCreateWoModal(defectId) {
+    if (this.woModalDefectId) this.woModalDefectId.value = defectId || '';
+    if (this.createWoModal) this.createWoModal.classList.remove('hidden');
+  }
+
+  closeCreateWoModal() {
+    if (this.createWoModal) this.createWoModal.classList.add('hidden');
+  }
+
+  async submitWorkOrder() {
+    const defectId = this.woModalDefectId.value;
+    const priority = this.woModalPriority.value;
+    const assignee = this.woModalAssignee.value;
+    const notes = this.woModalNotes.value;
+
+    const payload = {
+      defect_id: defectId,
+      priority: priority,
+      assigned_contractor: assignee,
+      description: notes
+    };
+
+    const res = await this.apiRequest('/api/v1/work-orders', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }) || await this.apiRequest('/work-orders', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    this.closeCreateWoModal();
+    if (res) {
+      this.showToast('Work order dispatched for ' + defectId + '!', 'success');
+      this.fetchWorkOrders();
+      this.fetchDefects();
+    } else {
+      this.showToast('Failed to dispatch work order.', 'error');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     Export CSV / JSON
+     -------------------------------------------------------------------------- */
+  exportData(format = 'csv') {
+    if (this.defects.length === 0) {
+      this.showToast('No road defects available to export.', 'info');
+      return;
+    }
+
+    if (format === 'json') {
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(this.defects, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', dataStr);
+      downloadAnchor.setAttribute('download', 'gartika_defects_' + Date.now() + '.json');
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      this.showToast('Exported defects as JSON.', 'success');
+    } else {
+      const headers = ['defect_id', 'defect_type', 'severity', 'best_confidence', 'latitude', 'longitude', 'status', 'observation_count', 'last_seen'];
+      const rows = this.defects.map(d => [
+        d.defect_id,
+        d.defect_type,
+        d.severity,
+        d.best_confidence,
+        d.latitude,
+        d.longitude,
+        d.status,
+        d.observation_count,
+        d.last_seen
+      ].join(','));
+      const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent([headers.join(','), ...rows].join('
+'));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', csvContent);
+      downloadAnchor.setAttribute('download', 'gartika_defects_' + Date.now() + '.csv');
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      this.showToast('Exported defects as CSV.', 'success');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     Global Event Binders & Phone Pairing QR
+     -------------------------------------------------------------------------- */
+  bindGlobalEvents() {
+    if (this.btnDrawerClose) this.btnDrawerClose.addEventListener('click', () => this.closeDrawer());
+    if (this.detailDrawerOverlay) this.detailDrawerOverlay.addEventListener('click', () => this.closeDrawer());
+    
+    if (this.btnCloseWoModal) this.btnCloseWoModal.addEventListener('click', () => this.closeCreateWoModal());
+    if (this.btnCancelWoModal) this.btnCancelWoModal.addEventListener('click', () => this.closeCreateWoModal());
+    if (this.btnSubmitWoModal) this.btnSubmitWoModal.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.submitWorkOrder();
+    });
+
+    const btnNewWorkOrderModal = document.getElementById('btnNewWorkOrderModal');
+    if (btnNewWorkOrderModal) {
+      btnNewWorkOrderModal.addEventListener('click', () => this.openCreateWoModal(''));
+    }
+
+    if (this.btnNotificationBell) {
+      this.btnNotificationBell.addEventListener('click', () => {
+        this.notificationDrawer.classList.toggle('hidden');
+      });
+    }
+
+    if (this.btnClearNotifications) {
+      this.btnClearNotifications.addEventListener('click', () => {
+        this.notifications = [];
+        this.renderNotifications();
+      });
+    }
+
+    if (this.btnExportCsv) this.btnExportCsv.addEventListener('click', () => this.exportData('csv'));
+    if (this.btnExportJson) this.btnExportJson.addEventListener('click', () => this.exportData('json'));
+
+    ['filterDefectType', 'filterDefectSeverity', 'filterDefectStatus'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => this.renderDefectsTable());
+    });
+    if (this.filterDefectSearch) {
+      this.filterDefectSearch.addEventListener('input', () => this.renderDefectsTable());
+    }
+
+    // Global Search Omnibox
+    if (this.globalSearchInput) {
+      this.globalSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const query = this.globalSearchInput.value.trim().toUpperCase();
+          if (query.startsWith('BUS-')) {
+            this.switchPage('fleet');
+          } else if (query.startsWith('DEF-')) {
+            this.switchPage('defects');
+            if (this.filterDefectSearch) this.filterDefectSearch.value = query;
+            this.renderDefectsTable();
+          } else if (query.startsWith('WO-')) {
+            this.switchPage('work-orders');
+          } else {
+            this.switchPage('defects');
+            if (this.filterDefectSearch) this.filterDefectSearch.value = query;
+            this.renderDefectsTable();
+          }
+        }
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === '/' && document.activeElement !== this.globalSearchInput) {
+          e.preventDefault();
+          this.globalSearchInput.focus();
+        }
+      });
+    }
+
+    // Settings Save
+    const btnSaveSettings = document.getElementById('btnSaveSettings');
+    if (btnSaveSettings) {
+      btnSaveSettings.addEventListener('click', () => {
+        const tokenInput = document.getElementById('settingAuthToken');
+        if (tokenInput) {
+          this.authToken = tokenInput.value.trim();
+          localStorage.setItem('gartika_auth_token', this.authToken);
+          this.showToast('Settings saved. Reconnecting...', 'success');
+          this.initWebSocket();
+        }
+      });
+    }
+  }
+
+  renderSettingsQr() {
+    const mobileLink = window.location.origin + '/mobile';
+    const settingsMobileLink = document.getElementById('settingsMobileLink');
+    if (settingsMobileLink) {
+      settingsMobileLink.href = mobileLink;
+      settingsMobileLink.textContent = mobileLink;
+    }
+
+    const qrBox = document.getElementById('settingsQrBox');
+    if (qrBox && typeof qrcode !== 'undefined') {
+      try {
+        const qr = qrcode(0, 'M');
+        qr.addData(mobileLink);
+        qr.make();
+        qrBox.innerHTML = qr.createImgTag(5, 10);
+      } catch (e) {
+        qrBox.innerHTML = '<span class="text-xs text-slate-500">Scan QR from mobile device</span>';
+      }
+    }
   }
 
   showToast(message, type = 'info') {
     if (!this.toastContainer) return;
     const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<span>${message}</span>`;
+    toast.className = 'toast toast-' + type;
+    toast.innerHTML = '<span>' + message + '</span>';
     this.toastContainer.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 250);
-    }, 3000);
-  }
-
-  initMap() {
-    try {
-      // Default view centering (neutral view until phone GPS connects)
-      const initialCenter = [12.971598, 77.594562];
-      this.map = L.map('gisMap', {
-        center: initialCenter,
-        zoom: 14,
-        zoomControl: true,
-      });
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-        subdomains: 'abc',
-      }).addTo(this.map);
-
-      const coordsBar = document.getElementById('mapCursorCoords');
-      if (coordsBar) {
-        this.map.on('mousemove', (e) => {
-          coordsBar.innerText = `Lat: ${e.latlng.lat.toFixed(5)}° N | Lon: ${e.latlng.lng.toFixed(5)}° E`;
-        });
-      }
-
-      this.busRoutePolyline = L.polyline([], {
-        color: '#3b82f6',
-        weight: 4,
-        opacity: 0.85
-      }).addTo(this.map);
-
-    } catch (e) {
-      console.error('[MAP] Initialization error:', e);
-    }
-  }
-
-  initWebSocket() {
-    try {
-      this.ws = new WebSocket(this.wsUrl);
-      
-      this.ws.onopen = () => {
-        if (this.wsStatusDot) this.wsStatusDot.className = 'dot-led online';
-        if (this.liveStatusText) this.liveStatusText.innerHTML = 'Live System: <strong>Online</strong>';
-      };
-
-      this.ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          this.handleIncomingEvent(payload);
-        } catch (e) {}
-      };
-
-      this.ws.onerror = () => {
-        if (this.wsStatusDot) this.wsStatusDot.className = 'dot-led';
-        if (this.liveStatusText) this.liveStatusText.innerHTML = 'Live System: <strong>Connecting...</strong>';
-      };
-
-      this.ws.onclose = () => {
-        if (this.wsStatusDot) this.wsStatusDot.className = 'dot-led';
-        if (this.liveStatusText) this.liveStatusText.innerHTML = 'Live System: <strong>Reconnecting</strong>';
-        setTimeout(() => this.initWebSocket(), 4000);
-      };
-    } catch (e) {
-      console.warn('[WS] Error:', e);
-    }
-  }
-
-  bindEvents() {
-    document.getElementById('btnConnectPhone')?.addEventListener('click', () => this.openPhoneModal());
-    document.getElementById('phoneModalClose')?.addEventListener('click', () => this.closePhoneModal());
-    document.getElementById('phoneModalOk')?.addEventListener('click', () => this.closePhoneModal());
-
-    document.getElementById('btnCopyMobileUrl')?.addEventListener('click', () => {
-      const url = this.mobileConnectUrl.value;
-      navigator.clipboard?.writeText(url);
-      this.showToast('Mobile URL copied to clipboard!', 'success');
-    });
-
-    document.getElementById('btnCenterBus')?.addEventListener('click', () => this.centerOnBus());
-    document.getElementById('btnFitAll')?.addEventListener('click', () => this.fitMapBounds());
-
-    const tabs = document.querySelectorAll('.tab-btn');
-    tabs.forEach((tab) => {
-      tab.addEventListener('click', (e) => {
-        tabs.forEach((t) => t.classList.remove('active'));
-        e.target.classList.add('active');
-        this.activeFeedFilter = e.target.dataset.filter;
-        this.renderEventFeed();
-      });
-    });
-
-    this.woFilterSelect?.addEventListener('change', (e) => {
-      this.renderWorkOrders(e.target.value);
-    });
-
-    document.getElementById('btnRefreshEvents')?.addEventListener('click', () => {
-      this.loadInitialData();
-      this.showToast('Synchronized with live backend', 'info');
-    });
-
-    document.getElementById('modalCloseBtn')?.addEventListener('click', () => this.closeEventModal());
-    document.getElementById('modalDismissBtn')?.addEventListener('click', () => this.closeEventModal());
-    this.btnCreateWorkOrder?.addEventListener('click', () => this.dispatchWorkOrderFromModal());
-  }
-
-  async loadInitialData() {
-    await Promise.all([
-      this.loadHealth(),
-      this.loadStats(),
-      this.loadEvents(),
-      this.loadWorkOrders(),
-      this.loadBusTelemetry()
-    ]);
-  }
-
-  async pollUpdates() {
-    await Promise.all([
-      this.loadStats(),
-      this.loadBusTelemetry()
-    ]);
-  }
-
-  async loadHealth() {
-    try {
-      const res = await fetch(`${this.backendUrl}/health`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.local_ip && this.mobileConnectUrl) {
-          const proto = window.location.protocol;
-          const port = window.location.port ? `:${window.location.port}` : '';
-          this.mobileConnectUrl.value = `${proto}//${data.local_ip}${port}/mobile`;
-          this.updateQrCode(this.mobileConnectUrl.value);
-        }
-      }
-    } catch (e) {}
-  }
-
-  async loadStats() {
-    try {
-      const res = await fetch(`${this.backendUrl}/stats/summary`);
-      if (res.ok) {
-        const s = await res.json();
-        if (this.metricActiveBuses) this.metricActiveBuses.innerHTML = `${s.active_buses || 0} <span class="metric-unit">Units</span>`;
-        if (this.metricRoadDefects) this.metricRoadDefects.innerText = s.road_defects || 0;
-        if (this.metricHighPriority) this.metricHighPriority.innerText = `${s.high_priority_events || 0} Critical`;
-        if (this.metricVehicles) this.metricVehicles.innerHTML = `${s.vehicles_detected || 0} <span class="metric-unit">Vehicles</span>`;
-      }
-    } catch (e) {}
-  }
-
-  async loadEvents() {
-    try {
-      const res = await fetch(`${this.backendUrl}/events?limit=40`);
-      if (res.ok) {
-        this.events = await res.json();
-        this.renderEventFeed();
-        this.renderEventMarkersOnMap();
-      }
-    } catch (e) {}
-  }
-
-  async loadWorkOrders() {
-    try {
-      const res = await fetch(`${this.backendUrl}/work-orders`);
-      if (res.ok) {
-        this.workOrders = await res.json();
-        this.renderWorkOrders();
-      }
-    } catch (e) {}
-  }
-
-  async loadBusTelemetry() {
-    try {
-      const res = await fetch(`${this.backendUrl}/telemetry/latest?bus_id=BUS-101`);
-      if (res.ok) {
-        const tel = await res.json();
-        this.updateBusTelemetryUI(tel);
-      }
-    } catch (e) {}
-  }
-
-  updateBusTelemetryUI(tel) {
-    if (!tel || tel.latitude === undefined || tel.longitude === undefined) return;
-    
-    if (this.teleLat) this.teleLat.innerText = tel.latitude !== null ? tel.latitude.toFixed(4) : '--';
-    if (this.teleLon) this.teleLon.innerText = tel.longitude !== null ? tel.longitude.toFixed(4) : '--';
-    if (this.teleSpeed) this.teleSpeed.innerText = `${(tel.speed || 0.0).toFixed(1)} km/h`;
-
-    const az = tel.az !== undefined ? tel.az : 9.81;
-    if (this.imuValStatus) {
-      if (Math.abs(az - 9.81) > 3.0) {
-        this.imuValStatus.innerHTML = `<span style="color:var(--accent-red); font-weight:700;">${az.toFixed(2)} m/s² (Bump)</span>`;
-      } else {
-        this.imuValStatus.innerText = `${az.toFixed(2)} m/s²`;
-      }
-    }
-
-    if (this.metricBusId) this.metricBusId.innerText = `${tel.bus_id || 'BUS-101'} (Active)`;
-    if (this.metricBusBadge) this.metricBusBadge.innerText = 'Online';
-
-    if (tel.latitude && tel.longitude) {
-      const newPos = [tel.latitude, tel.longitude];
-      this.busLocation = newPos;
-
-      if (!this.busMarker) {
-        const busIcon = L.divIcon({
-          className: 'custom-bus-icon',
-          html: `<div class="marker-bus-pulse"></div>`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12],
-        });
-        this.busMarker = L.marker(newPos, { icon: busIcon }).addTo(this.map);
-        this.busMarker.bindPopup(`<strong>${tel.bus_id || 'BUS-101'}</strong><br>Live Sensing Unit`);
-        
-        if (this.isFirstGpsLock) {
-          this.map.setView(newPos, 16);
-          this.isFirstGpsLock = false;
-        }
-      } else {
-        this.busMarker.setLatLng(newPos);
-      }
-
-      this.busTrail.push(newPos);
-      if (this.busTrail.length > 50) this.busTrail.shift();
-      if (this.busRoutePolyline) this.busRoutePolyline.setLatLngs(this.busTrail);
-    }
-  }
-
-  startLiveStreamPolling() {
-    let consecutiveEmpty = 0;
-    setInterval(async () => {
-      try {
-        const ts = Date.now();
-        const res = await fetch(`${this.backendUrl}/stream/latest-frame?t=${ts}`);
-        if (res.status === 200) {
-          const blob = await res.blob();
-          if (blob.size > 0) {
-            const objectUrl = URL.createObjectURL(blob);
-            if (this.liveStreamImg) {
-              this.liveStreamImg.src = objectUrl;
-              this.liveStreamImg.style.display = 'block';
-            }
-            if (this.streamPlaceholder) this.streamPlaceholder.style.display = 'none';
-            if (this.streamOverlayBadge) this.streamOverlayBadge.style.display = 'block';
-            consecutiveEmpty = 0;
-          }
-        } else {
-          consecutiveEmpty++;
-          if (consecutiveEmpty > 3) {
-            if (this.liveStreamImg) this.liveStreamImg.style.display = 'none';
-            if (this.streamPlaceholder) this.streamPlaceholder.style.display = 'flex';
-            if (this.streamOverlayBadge) this.streamOverlayBadge.style.display = 'none';
-          }
-        }
-      } catch (e) {}
-    }, 1000);
-  }
-
-  handleIncomingEvent(payload) {
-    if (!payload || !payload.type) return;
-
-    if (payload.type === 'NEW_EVENT' && payload.data) {
-      const evt = payload.data;
-      this.events.unshift(evt);
-      if (this.events.length > 50) this.events.pop();
-
-      this.renderEventFeed();
-      this.addEventMarkerToMap(evt);
-      this.showToast(`New ${evt.event_type}: ${evt.event_id}`, 'warn');
-      this.loadStats();
-    } else if (payload.type === 'TELEMETRY' && payload.data) {
-      this.updateBusTelemetryUI(payload.data);
-    } else if (payload.type === 'WORK_ORDER_UPDATE') {
-      this.loadWorkOrders();
-    }
-  }
-
-  renderEventFeed() {
-    if (!this.eventFeedScroll) return;
-
-    let filtered = this.events;
-    if (this.activeFeedFilter === 'POTHOLE') {
-      filtered = this.events.filter(e => e.event_type === 'POTHOLE' || e.event_type === 'ROAD_DEFECT');
-    } else if (this.activeFeedFilter === 'VEHICLE_COUNT') {
-      filtered = this.events.filter(e => e.event_type === 'VEHICLE_COUNT' || e.event_type === 'TRAFFIC');
-    } else if (this.activeFeedFilter === 'HIGH') {
-      filtered = this.events.filter(e => e.severity === 'HIGH' || e.severity === 'CRITICAL');
-    }
-
-    if (filtered.length === 0) {
-      this.eventFeedScroll.innerHTML = `
-        <div class="empty-state">
-          <p>Awaiting live detections from mobile camera stream...</p>
-        </div>
-      `;
-      return;
-    }
-
-    this.eventFeedScroll.innerHTML = filtered.map(evt => {
-      const isHigh = evt.severity === 'HIGH' || evt.severity === 'CRITICAL';
-      const badgeCls = isHigh ? 'badge-red' : (evt.event_type === 'POTHOLE' ? 'badge-amber' : 'badge-blue');
-      const timeStr = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Live';
-      const coordsStr = (evt.latitude && evt.longitude) ? `${evt.latitude.toFixed(4)}, ${evt.longitude.toFixed(4)}` : 'GPS Ingesting';
-      const thumb = evt.evidence_image_url ? `${this.backendUrl}${evt.evidence_image_url}` : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" fill="%23222"><rect width="36" height="36"/></svg>';
-
-      return `
-        <div class="event-card-item" onclick="window.gartikaApp.openEventModal('${evt.event_id}')">
-          <div class="event-item-left">
-            <img class="event-thumb" src="${thumb}" onerror="this.style.opacity=0.3" alt="Defect" />
-            <div>
-              <div class="event-title-line">
-                <span class="badge ${badgeCls}">${evt.event_type}</span>
-                <span>${intPercent(evt.confidence)}%</span>
-              </div>
-              <div class="event-sub-line font-mono">${coordsStr} • ${evt.bus_id || 'BUS-101'}</div>
-            </div>
-          </div>
-          <div class="event-item-right font-mono text-muted" style="font-size: 0.68rem;">
-            ${timeStr}
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  renderEventMarkersOnMap() {
-    this.events.forEach(evt => this.addEventMarkerToMap(evt));
-  }
-
-  addEventMarkerToMap(evt) {
-    if (!this.map || !evt.latitude || !evt.longitude) return;
-    if (this.eventMarkers[evt.event_id]) return;
-
-    const isPothole = evt.event_type === 'POTHOLE' || evt.event_type === 'ROAD_DEFECT';
-    const markerColor = isPothole ? '#ef4444' : '#f59e0b';
-    
-    const icon = L.divIcon({
-      className: 'custom-event-icon',
-      html: `<div class="marker-defect-dot" style="background: ${markerColor};"></div>`,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
-    });
-
-    const marker = L.marker([evt.latitude, evt.longitude], { icon }).addTo(this.map);
-    marker.bindPopup(`
-      <div style="font-size: 12px; padding: 4px;">
-        <strong style="color: ${markerColor};">${evt.event_type}</strong> (${intPercent(evt.confidence)}%)<br>
-        Severity: <strong>${evt.severity || 'MEDIUM'}</strong><br>
-        <a href="javascript:void(0)" onclick="window.gartikaApp.openEventModal('${evt.event_id}')" style="color: #3b82f6; text-decoration: underline;">Inspect Details</a>
-      </div>
-    `);
-
-    this.eventMarkers[evt.event_id] = marker;
-  }
-
-  renderWorkOrders(filterStatus = 'ALL') {
-    if (!this.woItemsContainer) return;
-
-    let list = this.workOrders;
-    if (filterStatus !== 'ALL') {
-      list = list.filter(w => w.status === filterStatus);
-    }
-
-    if (list.length === 0) {
-      this.woItemsContainer.innerHTML = `
-        <div class="empty-state">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M9 11l3 3L22 4"></path>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-          </svg>
-          <p>No active work orders. Verified defects from your mobile stream can be dispatched here.</p>
-        </div>
-      `;
-      return;
-    }
-
-    this.woItemsContainer.innerHTML = list.map(wo => {
-      const isResolved = wo.status === 'RESOLVED';
-      const badgeCls = isResolved ? 'badge-green' : (wo.priority === 'CRITICAL' ? 'badge-red' : 'badge-blue');
-
-      return `
-        <div class="wo-item-card">
-          <div class="wo-item-left">
-            <span class="badge ${badgeCls} font-mono">${wo.work_order_id}</span>
-            <div>
-              <div class="wo-item-title">${wo.title}</div>
-              <div class="wo-item-meta font-mono">${wo.assigned_contractor || 'Municipal Works'} • ${wo.status}</div>
-            </div>
-          </div>
-          <div class="wo-item-right">
-            <select class="form-select" onchange="window.gartikaApp.updateWorkOrderStatus('${wo.work_order_id}', this.value)">
-              <option value="OPEN" ${wo.status === 'OPEN' ? 'selected' : ''}>Open</option>
-              <option value="ASSIGNED" ${wo.status === 'ASSIGNED' ? 'selected' : ''}>Assigned</option>
-              <option value="IN PROGRESS" ${wo.status === 'IN PROGRESS' ? 'selected' : ''}>In Progress</option>
-              <option value="RESOLVED" ${wo.status === 'RESOLVED' ? 'selected' : ''}>Resolved</option>
-            </select>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  async updateWorkOrderStatus(woId, newStatus) {
-    try {
-      const res = await fetch(`${this.backendUrl}/work-orders/${woId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (res.ok) {
-        this.showToast(`Updated ${woId} to ${newStatus}`, 'success');
-        this.loadWorkOrders();
-      }
-    } catch (e) {
-      this.showToast('Failed to update work order', 'warn');
-    }
-  }
-
-  openEventModal(eventId) {
-    const evt = this.events.find(e => e.event_id === eventId);
-    if (!evt) return;
-
-    this.selectedEvent = evt;
-    if (this.modalEventTitle) this.modalEventTitle.innerText = `${evt.event_type} Hazard Inspection`;
-    if (this.modalEventId) this.modalEventId.innerText = evt.event_id;
-    if (this.modalEventType) this.modalEventType.innerText = evt.event_type;
-    if (this.modalConfidence) this.modalConfidence.innerText = `${intPercent(evt.confidence)}%`;
-    if (this.modalBusId) this.modalBusId.innerText = evt.bus_id || 'BUS-101';
-    if (this.modalLocation) this.modalLocation.innerText = (evt.latitude && evt.longitude) ? `${evt.latitude.toFixed(5)}, ${evt.longitude.toFixed(5)}` : 'Awaiting GPS';
-    if (this.modalTimestamp) this.modalTimestamp.innerText = evt.timestamp ? new Date(evt.timestamp).toLocaleString() : 'Just now';
-
-    if (this.modalEvidenceImg) {
-      if (evt.evidence_image_url) {
-        this.modalEvidenceImg.src = `${this.backendUrl}${evt.evidence_image_url}`;
-        this.modalEvidenceImg.style.display = 'block';
-        if (this.modalEvidenceFallback) this.modalEvidenceFallback.style.display = 'none';
-      } else {
-        this.modalEvidenceImg.style.display = 'none';
-        if (this.modalEvidenceFallback) this.modalEvidenceFallback.style.display = 'flex';
-      }
-    }
-
-    if (this.eventModal) this.eventModal.classList.add('open');
-  }
-
-  closeEventModal() {
-    if (this.eventModal) this.eventModal.classList.remove('open');
-    this.selectedEvent = null;
-  }
-
-  async dispatchWorkOrderFromModal() {
-    if (!this.selectedEvent) return;
-    try {
-      const res = await fetch(`${this.backendUrl}/work-orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event_id: this.selectedEvent.event_id,
-          title: `Civic Repair: ${this.selectedEvent.event_type} (${intPercent(this.selectedEvent.confidence)}% Conf)`,
-          priority: this.selectedEvent.severity || 'HIGH',
-          assigned_contractor: 'BBMP Road Maintenance Crew'
-        })
-      });
-
-      if (res.ok) {
-        this.showToast('Repair work order dispatched successfully!', 'success');
-        this.closeEventModal();
-        this.loadWorkOrders();
-      } else {
-        this.showToast('Work order already exists for this event.', 'info');
-        this.closeEventModal();
-      }
-    } catch (e) {
-      this.showToast('Failed to dispatch work order', 'warn');
-    }
-  }
-
-  openPhoneModal() {
-    if (this.phoneModal) this.phoneModal.classList.add('open');
-  }
-
-  closePhoneModal() {
-    if (this.phoneModal) this.phoneModal.classList.remove('open');
-  }
-
-  updateQrCode(url) {
-    if (!this.qrCodeContainer) return;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=4&data=${encodeURIComponent(url)}`;
-    this.qrCodeContainer.innerHTML = `<img src="${qrUrl}" alt="QR Code" style="width:134px; height:134px;" />`;
-  }
-
-  centerOnBus() {
-    if (this.busLocation && this.map) {
-      this.map.setView(this.busLocation, 16);
-      this.showToast('Centered on mobile sensor', 'info');
-    } else {
-      this.showToast('Awaiting GPS lock from mobile phone', 'warn');
-    }
-  }
-
-  fitMapBounds() {
-    if (!this.map) return;
-    const coords = [];
-    if (this.busLocation) coords.push(this.busLocation);
-    this.events.forEach(e => {
-      if (e.latitude && e.longitude) coords.push([e.latitude, e.longitude]);
-    });
-
-    if (coords.length > 0) {
-      this.map.fitBounds(L.latLngBounds(coords), { padding: [40, 40] });
-    }
+    }, 3500);
   }
 }
 
-function intPercent(val) {
-  if (!val) return 85;
-  if (val <= 1.0) return Math.round(val * 100);
-  return Math.round(val);
-}
-
-// Instantiate global app instance
 document.addEventListener('DOMContentLoaded', () => {
-  window.gartikaApp = new GartikaCommandCenter();
+  window.gartikaApp = new GartikaDashboardApp();
 });
