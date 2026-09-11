@@ -183,37 +183,53 @@ python3 scripts/run_webcam_edge.py --video path/to/dashcam.mp4
 
 ---
 
-## 7. REST & WebSocket API Reference
+## 7. Versioned REST & WebSocket API Reference
+
+All core endpoints are exposed with versioning under `/api/v1` and maintained with root aliases for backward compatibility.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | Subsystem status, DB connection, local IP |
-| `GET` | `/stats` | Fleet summary, road defects, vehicle totals, bandwidth |
-| `POST` | `/events` | Ingest AI detection event (geotagged) |
-| `GET` | `/events` | Filter events by type, severity, confidence, or bus |
-| `GET` | `/events/{id}` | Retrieve individual event details |
-| `PATCH`| `/events/{id}` | Update event status / severity |
-| `POST` | `/telemetry` | Ingest GPS & IMU vibration telemetry from phone (triggers bump fusion) |
-| `GET` | `/buses` | Retrieve active buses and telemetry positions |
-| `POST` | `/stream/frame` | Upload live camera frame (runs real-time CV inference) |
-| `GET` | `/stream/latest-frame`| Retrieve latest JPEG frame for live stream preview |
-| `POST` | `/work-orders` | Dispatch maintenance work order from detection event |
-| `GET` | `/work-orders` | Retrieve list of maintenance work orders |
-| `PATCH`| `/work-orders/{id}` | Update work order status (`OPEN`, `ASSIGNED`, `IN PROGRESS`, `RESOLVED`) |
-| `WS` | `/ws/events` | High-speed real-time WebSocket event broadcast stream |
+| `GET` | `/api/v1/health` | Service health, DB connectivity, uptime |
+| `GET` | `/api/v1/ready` | Readiness probe for container orchestration |
+| `GET` | `/api/v1/stats` | Observability metrics, fleet totals, verification stats |
+| `GET` | `/api/v1/defects` | Query persistent physical defects with multi-bus status |
+| `GET` | `/api/v1/defects/{id}/observations` | Chronological observation history across buses |
+| `POST`| `/api/v1/telemetry` | Ingest IMU/GPS telemetry and trigger bump shock fusion |
+| `POST`| `/api/v1/stream/frame` | Upload live camera frame for real-time edge CV inference |
+| `GET` | `/api/v1/stream/latest-frame` | Retrieve latest JPEG frame for live stream preview |
+| `POST`| `/api/v1/work-orders` | Dispatch maintenance work order from verified defect |
+| `GET` | `/api/v1/work-orders` | List active municipal maintenance orders |
+| `PATCH`| `/api/v1/work-orders/{id}` | Update repair order lifecycle status |
+| `WS`  | `/ws/events` | High-speed real-time WebSocket event broadcast stream |
 
 ---
 
-## 8. Automated Test Suite
+## 8. Deterministic Multi-Bus Simulation & Bandwidth Audit
 
-Run the full pytest suite covering AI detectors, API routes, sensor fusion, static routing, and end-to-end event loops:
+### 1. Run the Deterministic 8-Step Simulation
+Executes the end-to-end multi-bus detection $\rightarrow$ verification $\rightarrow$ work order dispatch $\rightarrow$ closed-loop repair audit:
+```bash
+python3 scripts/run_demo.py
+```
+
+### 2. Run the Bandwidth & Cost Calculation Script
+Computes theoretical and measured network transmission reduction between raw cloud video and Gartika edge sensing:
+```bash
+python3 scripts/calculate_bandwidth.py --fleet 10 --hours 8
+```
+
+---
+
+## 9. Automated Test Suite
+
+Run the full pytest suite covering AI detectors, API routes, sensor fusion buffers, multi-bus elevation, closed-loop repair audits, and end-to-end loops:
 ```bash
 pytest tests/ -v
 ```
 
 ---
 
-## 9. Production Hardware Scaling Roadmap
+## 10. Production Hardware Scaling Roadmap
 
 ```text
 Raspberry Pi 5 (8GB) + Hailo-8 M.2 AI Accelerator (26 TOPS)
@@ -225,13 +241,13 @@ Raspberry Pi 5 (8GB) + Hailo-8 M.2 AI Accelerator (26 TOPS)
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting & FAQ
 
 - **Camera Permissions over HTTP on Mobile:**
-  Mobile browsers restrict continuous `getUserMedia()` streams to HTTPS on non-localhost IPs. The mobile terminal includes a native snapshot button (`Take Snapshot Frame`) and **Simulate Route GPS** & **Trigger Road Bump** tools that work across all mobile browsers.
+  Mobile browsers restrict continuous `getUserMedia()` streams to HTTPS on non-localhost IPs. The mobile terminal includes native snapshot capture and **Simulate Route GPS** & **Trigger Road Bump** tools that work seamlessly across all mobile devices.
 - **Port 8000 Already in Use:**
   Set `BACKEND_PORT=8080` in `.env` or start uvicorn with `--port 8080`.
-- **Reset to Clean Live Data:**
+- **Reset to Clean Live State:**
   Run `python3 scripts/reset_to_live.py`.
 
 ---

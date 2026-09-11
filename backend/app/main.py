@@ -1,7 +1,7 @@
 """
 Main FastAPI Application Entrypoint for Gartika Urban Intelligence.
 
-Sets up application lifecycle (startup banner, DB migration), registers REST API routes,
+Sets up application lifecycle (startup banner, DB migration), registers versioned REST API routes,
 configures CORS middleware, mounts static assets (evidence, mobile app, dashboard),
 and establishes the real-time WebSocket event streaming gateway.
 """
@@ -14,7 +14,7 @@ if str(BASE_DIR) not in sys.path:
 
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from backend.app.config import settings
 from backend.app.database import engine, Base
 from backend.app.websocket import manager
-from backend.app.routes import events, buses, work_orders, telemetry, stats, stream
+from backend.app.routes import events, buses, work_orders, telemetry, stats, stream, defects
 
 # Configure logging
 logging.basicConfig(
@@ -36,8 +36,7 @@ logger = logging.getLogger("gartika.main")
 async def lifespan(app: FastAPI):
     """
     FastAPI lifespan context manager.
-    
-    Executes database schema migrations on startup, logs system connection endpoints,
+    Executes database schema migrations on startup, logs connection endpoints,
     and handles graceful teardown on shutdown.
     """
     # Initialize database tables
@@ -75,15 +74,27 @@ app = FastAPI(
 # CORS middleware for mobile devices and external frontend clients
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include API Routers
+# Versioned API Router (v1)
+api_v1 = APIRouter(prefix="/api/v1")
+api_v1.include_router(stats.router)
+api_v1.include_router(events.router)
+api_v1.include_router(defects.router)
+api_v1.include_router(buses.router)
+api_v1.include_router(work_orders.router)
+api_v1.include_router(telemetry.router)
+api_v1.include_router(stream.router)
+app.include_router(api_v1)
+
+# Direct unversioned routes for backward compatibility
 app.include_router(stats.router)
 app.include_router(events.router)
+app.include_router(defects.router)
 app.include_router(buses.router)
 app.include_router(work_orders.router)
 app.include_router(telemetry.router)
@@ -106,7 +117,6 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            # Echo or handle incoming client ping/messages
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:

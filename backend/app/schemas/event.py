@@ -14,19 +14,22 @@ class EventBase(BaseModel):
     """
     event_id: Optional[str] = None
     bus_id: str
-    event_type: str # POTHOLE, ROAD_DEFECT, VEHICLE_COUNT, WATERLOGGING, CRACK
-    confidence: float
-    latitude: float
-    longitude: float
+    event_type: str  # POTHOLE, ROAD_DEFECT, VEHICLE_COUNT, WATERLOGGING, CRACK, SPEED_BREAKER, ROAD_ANOMALY
+    confidence: float = 0.0
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     timestamp: Optional[datetime] = None
-    severity: Optional[str] = "MEDIUM" # LOW, MEDIUM, HIGH, CRITICAL
+    severity: Optional[str] = "MEDIUM"  # LOW, MEDIUM, HIGH, CRITICAL
     evidence_path: Optional[str] = None
     status: Optional[str] = "NEW"
     vehicle_class: Optional[str] = None
     count: Optional[int] = None
     vibration_level: Optional[str] = None
     location_name: Optional[str] = None
+    defect_id: Optional[str] = None
+    sequence_number: Optional[int] = None
     extra_data: Optional[str] = None
+
 
 class EventCreate(EventBase):
     """

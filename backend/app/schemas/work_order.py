@@ -12,11 +12,12 @@ class WorkOrderBase(BaseModel):
     """
     Base properties shared across WorkOrder schemas.
     """
-    event_id: str
+    event_id: Optional[str] = None
+    defect_id: Optional[str] = None
     title: str
     description: Optional[str] = None
-    priority: Optional[str] = "HIGH"
-    status: Optional[str] = "OPEN" # OPEN, ASSIGNED, IN PROGRESS, RESOLVED
+    priority: Optional[str] = "HIGH"  # LOW, MEDIUM, HIGH, CRITICAL
+    status: Optional[str] = "OPEN"    # OPEN, ASSIGNED, IN PROGRESS, REPAIRED, REPAIR_VERIFIED, REPAIR_FAILED, RESOLVED, CLOSED, CANCELLED
     assigned_to: Optional[str] = "BBMP Road Maintenance Cell #4"
     location_name: Optional[str] = "MG Road / Residency Road Junction"
     latitude: Optional[float] = None
@@ -31,12 +32,13 @@ class WorkOrderCreate(WorkOrderBase):
 
 class WorkOrderUpdate(BaseModel):
     """
-    Schema for modifying work order status, priority, or assignment.
+    Schema for modifying work order status, priority, notes, or assignment.
     """
     status: Optional[str] = None
     priority: Optional[str] = None
     assigned_to: Optional[str] = None
     description: Optional[str] = None
+    notes: Optional[str] = None
 
 class WorkOrderResponse(WorkOrderBase):
     """
@@ -45,4 +47,9 @@ class WorkOrderResponse(WorkOrderBase):
     id: int
     work_order_id: str
     created_at: datetime
+    assigned_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    notes: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+

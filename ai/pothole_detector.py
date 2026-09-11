@@ -112,6 +112,8 @@ class PotholeDetector:
                             "bbox": [int(x1), int(y1), int(x2), int(y2)],
                             "event_type": cls_name,
                             "confidence": round(float(final_conf), 2),
+                            "source": "yolo",
+                            "verified": True,
                             "severity": severity,
                             "vibration_level": vibration_level,
                             "area": int((x2 - x1) * (y2 - y1))
@@ -197,8 +199,8 @@ class PotholeDetector:
                         # Insufficient contrast depression for a true road crater
                         continue
 
-                    # Base confidence scaled by depression contrast, circularity, and solidity
-                    base_conf = 0.52 + min(0.32, contrast_diff * 0.45 + circularity * 0.15 + solidity * 0.10)
+                    # Heuristic score scaled by depression contrast, circularity, and solidity
+                    candidate_score = round(min(0.78, 0.40 + contrast_diff * 0.35 + circularity * 0.10 + solidity * 0.10), 2)
                     
                     # Sensor Fusion: Incorporate IMU vibration measurements if available
                     vibration_boost = 0.0
@@ -219,13 +221,13 @@ class PotholeDetector:
                             vibration_boost = 0.08
                             vibration_level = "MEDIUM"
 
-                    final_conf = min(0.98, base_conf + vibration_boost)
+                    final_score = min(0.95, round(candidate_score + vibration_boost, 2))
                     
-                    if final_conf >= self.conf_threshold:
-                        # Determine severity based on physical footprint, confidence, and vibration
-                        if area > 18000 or final_conf > 0.88 or vibration_level == "HIGH":
+                    if final_score >= self.conf_threshold:
+                        # Determine severity based on physical footprint, score, and vibration
+                        if area > 18000 or final_score > 0.85 or vibration_level == "HIGH":
                             severity = "HIGH"
-                        elif area > 6000 or final_conf > 0.78:
+                        elif area > 6000 or final_score > 0.70:
                             severity = "MEDIUM"
                         else:
                             severity = "LOW"
@@ -237,11 +239,15 @@ class PotholeDetector:
                         defects.append({
                             "bbox": [x, full_y1, x + bw, full_y2],
                             "event_type": "POTHOLE",
-                            "confidence": round(float(final_conf), 2),
+                            "confidence": final_score,
+                            "heuristic_score": candidate_score,
+                            "source": "opencv_heuristic",
+                            "verified": False,
                             "severity": severity,
                             "vibration_level": vibration_level,
                             "area": int(area)
                         })
+
 
         # Return top 2 strongest non-overlapping detections sorted by confidence
         if defects:

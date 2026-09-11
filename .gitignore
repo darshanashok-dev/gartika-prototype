@@ -11,14 +11,30 @@ htmlcov/
 *.swo
 *~
 
+# Secrets & Certificates
+.env
+*.pem
+*.key
+*.crt
+certificates/
+
 # Database & Runtime Data
 gartika.db
 gartika.db-journal
-data/evidence/
+*.db
+data/evidence/*
+!data/evidence/.gitkeep
 data/videos/*.mp4
 !data/videos/.gitkeep
+
+# Build artifacts & distributions
+dashboard/dist/
+mobile/dist/
+dist/
+build/
 
 # Training checkpoints and runs
 runs/
 yolov8*.pt
 dataset/labels/*.cache
+

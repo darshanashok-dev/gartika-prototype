@@ -103,6 +103,8 @@ class VehicleDetector:
                                 "bbox": [int(x1), int(y1), int(x2), int(y2)],
                                 "class_name": TARGET_CLASSES[cls_id],
                                 "confidence": round(conf, 3),
+                                "source": "yolo",
+                                "verified": True,
                                 "class_id": cls_id
                             })
                 return detections
@@ -126,10 +128,19 @@ class VehicleDetector:
                 # Filter shapes matching vehicle aspect ratios
                 if 0.6 < aspect_ratio < 2.5:
                     y_adj = y + int(h * 0.4)
+                    # Compute candidate heuristic score based on geometric solidity & area
+                    hull = cv2.convexHull(cnt)
+                    solidity = area / max(1.0, cv2.contourArea(hull))
+                    heuristic_score = round(min(0.72, 0.40 + solidity * 0.25), 2)
+                    
                     detections.append({
                         "bbox": [x, y_adj, x + bw, y_adj + bh],
                         "class_name": "car" if aspect_ratio > 1.1 else "motorcycle",
-                        "confidence": 0.82,
+                        "confidence": heuristic_score,
+                        "heuristic_score": heuristic_score,
+                        "source": "opencv_heuristic",
+                        "verified": False,
                         "class_id": 2
                     })
         return detections
+

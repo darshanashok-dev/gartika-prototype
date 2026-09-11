@@ -48,7 +48,7 @@ class Telemetry(Base):
     ax = Column(Float, default=0.0)
     ay = Column(Float, default=0.0)
     az = Column(Float, default=9.81)
-    gx = Column(Float, default=0.0)
-    gy = Column(Float, default=0.0)
-    gz = Column(Float, default=0.0)
+    heading = Column(Float, nullable=True)
+    sequence_number = Column(Integer, nullable=True, index=True)
     timestamp = Column(DateTime, default=utc_now, index=True)
+

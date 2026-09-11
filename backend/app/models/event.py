@@ -55,6 +55,9 @@ class Event(Base):
     status = Column(String(30), default="NEW", index=True) # NEW, IN_REVIEW, WORK_ORDER_CREATED, RESOLVED
     vehicle_class = Column(String(50), nullable=True)
     count = Column(Integer, nullable=True)
-    vibration_level = Column(String(20), nullable=True) # LOW, MEDIUM, HIGH
     location_name = Column(String(150), nullable=True)
+    defect_id = Column(String(50), index=True, nullable=True)
+    vibration_level = Column(String(20), nullable=True)
+    sequence_number = Column(Integer, nullable=True)
     extra_data = Column(Text, nullable=True)
+

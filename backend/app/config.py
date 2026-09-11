@@ -38,19 +38,42 @@ class Settings:
     """
     Global application settings and directory path configurations.
     """
-    PROJECT_NAME: str = "Gartika Urban Intelligence"
-    VERSION: str = "1.0.0"
+    PROJECT_NAME: str = os.getenv("PROJECT_NAME", "Gartika Urban Intelligence")
+    VERSION: str = "1.1.0"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    
+    # Fleet & Server
     GARTIKA_BUS_ID: str = os.getenv("GARTIKA_BUS_ID", "BUS-101")
     BACKEND_HOST: str = os.getenv("BACKEND_HOST", "0.0.0.0")
     BACKEND_PORT: int = int(os.getenv("BACKEND_PORT", "8000"))
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
     DASHBOARD_PORT: int = int(os.getenv("DASHBOARD_PORT", "3000"))
-    DEMO_MODE: bool = False
+    DEMO_MODE: bool = os.getenv("DEMO_MODE", "false").lower() in ("true", "1", "yes")
+    
+    # CORS Configuration
+    CORS_ORIGINS_RAW: str = os.getenv("CORS_ORIGINS", "*")
+    @property
+    def cors_origins(self) -> list:
+        if self.CORS_ORIGINS_RAW.strip() == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.CORS_ORIGINS_RAW.split(",") if origin.strip()]
+
+    # AI & Sensor Fusion
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.45"))
+    FUSION_TEMPORAL_WINDOW_MS: int = int(os.getenv("FUSION_TEMPORAL_WINDOW_MS", "500"))
+    SPATIAL_DEDUP_METERS: float = float(os.getenv("SPATIAL_DEDUP_METERS", "15.0"))
+    
+    # Security & Auth
+    DEVICE_AUTH_ENABLED: bool = os.getenv("DEVICE_AUTH_ENABLED", "false").lower() in ("true", "1", "yes")
+    DEVICE_API_KEY: str = os.getenv("DEVICE_API_KEY", "gartika_dev_device_token_secret")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "gartika_jwt_secret_change_in_production")
+
+    # Database Configuration (SQLite / PostgreSQL / PostGIS)
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'gartika.db'}")
     
-    # Filesystem Storage Paths
+    # Filesystem & Media Storage Paths
     BASE_DIR: Path = BASE_DIR
+    STORAGE_TYPE: str = os.getenv("STORAGE_TYPE", "local")
     EVIDENCE_DIR: Path = BASE_DIR / os.getenv("EVIDENCE_DIR", "data/evidence")
     VIDEOS_DIR: Path = BASE_DIR / os.getenv("VIDEOS_DIR", "data/videos")
     DEMO_DIR: Path = BASE_DIR / "data/demo"
@@ -62,7 +85,7 @@ class Settings:
     LOCAL_IP: str = get_local_ip()
     SSL_CERT_PATH: Path = BASE_DIR / os.getenv("SSL_CERT_PATH", "cert.pem")
     SSL_KEY_PATH: Path = BASE_DIR / os.getenv("SSL_KEY_PATH", "key.pem")
-    USE_HTTPS: bool = os.getenv("USE_HTTPS", "true").lower() in ("true", "1", "yes")
+    USE_HTTPS: bool = os.getenv("USE_HTTPS", "false").lower() in ("true", "1", "yes")
 
 settings = Settings()
 
@@ -70,3 +93,4 @@ settings = Settings()
 settings.EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 settings.VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 settings.DEMO_DIR.mkdir(parents=True, exist_ok=True)
+

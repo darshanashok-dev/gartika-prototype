@@ -1,8 +1,8 @@
 """
-Telemetry Ingestion & Sensor Shock Detection Routes for Gartika Urban Intelligence.
+Telemetry Ingestion & Sensor Fusion Routes for Gartika Urban Intelligence.
 
 Ingests high-frequency GPS and IMU accelerometer data from mobile units,
-detects road bump shocks in real-time, pairs with recent camera frames, and broadcasts
+buffers sensor samples per vehicle, classifies road bump impacts, and broadcasts
 live telemetry coordinates to the GIS Command Center.
 """
 
@@ -10,7 +10,7 @@ import logging
 import uuid
 import time
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -22,6 +22,8 @@ from backend.app.models.event import Event
 from backend.app.schemas.telemetry import TelemetryCreate, TelemetryResponse
 from backend.app.websocket import manager
 from backend.app.config import settings
+from backend.app.fusion.engine import fusion_engine
+from backend.app.fusion.buffer import buffer_manager
 
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 logger = logging.getLogger("gartika.telemetry")
@@ -29,121 +31,92 @@ logger = logging.getLogger("gartika.telemetry")
 @router.post("", response_model=TelemetryResponse, status_code=status.HTTP_201_CREATED)
 async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db)):
     """
-    Ingest live GPS and IMU telemetry from a smartphone edge unit.
+    Ingest live GPS and IMU telemetry from a smartphone edge sensing unit.
     
-    Processes accelerometer vertical axis (az) to detect severe road bump impacts.
-    If a vertical spike exceeding threshold is detected, it automatically creates a
-    Pothole event paired with the latest camera frame and triggers real-time alerts.
-    
-    Args:
-        t_in: Validated TelemetryCreate payload.
-        db: Scoped database session.
-        
-    Returns:
-        Telemetry: Stored telemetry record.
+    Processes 3-axis accelerometer readings through the SensorFusionEngine.
+    If a significant vertical acceleration shock is observed, it classifies the event
+    as a road impact anomaly, searches for a temporally-aligned camera frame from the same bus,
+    and broadcasts the corroborated alert.
     """
+    bus_id = t_in.bus_id.strip().upper()
     ts = t_in.timestamp or datetime.now(timezone.utc)
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
-    
+
+    # Validate coordinate ranges (-90 to +90, -180 to +180)
+    if not (-90.0 <= t_in.latitude <= 90.0 and -180.0 <= t_in.longitude <= 180.0):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid GPS coordinates: lat={t_in.latitude}, lon={t_in.longitude}"
+        )
+
     try:
+        # Record raw telemetry
         db_t = Telemetry(
-            bus_id=t_in.bus_id,
+            bus_id=bus_id,
             latitude=t_in.latitude,
             longitude=t_in.longitude,
             accuracy=t_in.accuracy,
             speed=t_in.speed,
-            ax=t_in.ax,
-            ay=t_in.ay,
-            az=t_in.az,
-            gx=t_in.gx,
-            gy=t_in.gy,
-            gz=t_in.gz,
+            heading=t_in.heading,
+            ax=t_in.ax or 0.0,
+            ay=t_in.ay or 0.0,
+            az=t_in.az if t_in.az is not None else 9.81,
+            sequence_number=t_in.sequence_number,
             timestamp=ts
         )
         db.add(db_t)
-        
-        # Update or register bus status and position
-        bus = db.query(Bus).filter(Bus.bus_id == t_in.bus_id).first()
+
+        # Update bus registry state
+        bus = db.query(Bus).filter(Bus.bus_id == bus_id).first()
         if bus:
             bus.latitude = t_in.latitude
             bus.longitude = t_in.longitude
-            bus.speed = t_in.speed
+            bus.speed = t_in.speed or 0.0
             bus.last_seen = ts
             bus.status = "ONLINE"
         else:
             bus = Bus(
-                bus_id=t_in.bus_id,
-                name=f"Mobile Unit {t_in.bus_id}",
+                bus_id=bus_id,
+                name=f"Mobile Sensing Unit {bus_id}",
                 latitude=t_in.latitude,
                 longitude=t_in.longitude,
-                speed=t_in.speed,
+                speed=t_in.speed or 0.0,
                 last_seen=ts,
                 status="ONLINE"
             )
             db.add(bus)
-            
-        # Check for Real Accelerometer Road Bump Shock Spike (Sensor Fusion)
-        az_val = t_in.az if t_in.az is not None else 9.81
-        if az_val > 13.5 or abs(az_val - 9.81) > 4.0:
-            evt_code = uuid.uuid4().hex[:8].upper()
-            evt_id = f"EVT-POTH-{evt_code}"
-            
-            # Check if there is a recent frame in stream module to save as evidence
-            from backend.app.routes.stream import latest_frame_bytes
-            evidence_path = None
-            if latest_frame_bytes:
-                filename = f"{evt_id}_{int(time.time())}.jpg"
-                save_path = settings.EVIDENCE_DIR / filename
-                settings.EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-                with open(save_path, "wb") as f:
-                    f.write(latest_frame_bytes)
-                evidence_path = f"/evidence/{filename}"
 
-            bump_event = Event(
-                event_id=evt_id,
-                bus_id=t_in.bus_id,
-                event_type="POTHOLE",
-                confidence=0.92,
-                latitude=float(t_in.latitude),
-                longitude=float(t_in.longitude),
-                severity="HIGH" if az_val > 15.0 else "MEDIUM",
-                vibration_level="HIGH",
-                evidence_path=evidence_path,
-                status="NEW",
-                timestamp=ts
-            )
-            db.add(bump_event)
-            db.commit()
-            db.refresh(bump_event)
+        # Pass IMU and GPS reading to Sensor Fusion Engine
+        fused_shock_event = fusion_engine.process_imu_telemetry(
+            bus_id=bus_id,
+            lat=t_in.latitude,
+            lon=t_in.longitude,
+            ax=t_in.ax or 0.0,
+            ay=t_in.ay or 0.0,
+            az=t_in.az if t_in.az is not None else 9.81,
+            speed=t_in.speed or 0.0,
+            heading=t_in.heading,
+            sequence_number=t_in.sequence_number,
+            timestamp_sec=ts.timestamp(),
+            db=db
+        )
 
-            # Broadcast new defect event immediately over WebSocket
-            await manager.broadcast({
-                "type": "NEW_EVENT",
-                "data": {
-                    "id": bump_event.id,
-                    "event_id": bump_event.event_id,
-                    "bus_id": bump_event.bus_id,
-                    "event_type": bump_event.event_type,
-                    "confidence": bump_event.confidence,
-                    "latitude": bump_event.latitude,
-                    "longitude": bump_event.longitude,
-                    "severity": bump_event.severity,
-                    "evidence_image_url": bump_event.evidence_path,
-                    "timestamp": bump_event.timestamp.isoformat()
-                }
-            })
-            logger.info(f"[SENSOR FUSION] Real IMU road shock detected at {t_in.latitude}, {t_in.longitude} (az={az_val:.2f} m/s²)")
-        else:
-            db.commit()
-
+        db.commit()
         db.refresh(db_t)
+
+        # If a verified shock event was created, broadcast over WebSocket
+        if fused_shock_event:
+            await manager.broadcast({"type": "NEW_EVENT", "data": fused_shock_event})
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        logger.error(f"[TELEMETRY] Error ingesting telemetry: {e}")
+        logger.error(f"[TELEMETRY] Error ingesting telemetry for {bus_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to ingest telemetry: {str(e)}")
-    
-    # Broadcast telemetry update to dashboard
+
+    # Broadcast real-time telemetry position update to dashboard
     tel_payload = {
         "bus_id": db_t.bus_id,
         "latitude": db_t.latitude,
@@ -153,11 +126,13 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
         "ax": db_t.ax,
         "ay": db_t.ay,
         "az": db_t.az,
+        "heading": db_t.heading,
+        "sequence_number": db_t.sequence_number,
         "timestamp": db_t.timestamp.isoformat()
     }
     await manager.broadcast({"type": "TELEMETRY", "data": tel_payload})
     await manager.broadcast({"type": "TELEMETRY_UPDATE", "data": tel_payload})
-    
+
     return db_t
 
 @router.get("/buses/{bus_id}/telemetry", response_model=List[TelemetryResponse])
@@ -169,31 +144,16 @@ def get_bus_telemetry(
 ):
     """
     Retrieve historical telemetry breadcrumbs for a specific bus.
-    
-    Args:
-        bus_id: Unique bus identifier.
-        limit: Max records.
-        offset: Skip records.
-        db: Scoped database session.
-        
-    Returns:
-        list of Telemetry: Historical telemetry entries ordered newest first.
     """
-    records = db.query(Telemetry).filter(Telemetry.bus_id == bus_id).order_by(desc(Telemetry.timestamp)).offset(offset).limit(limit).all()
+    records = db.query(Telemetry).filter(Telemetry.bus_id == bus_id.upper()).order_by(desc(Telemetry.timestamp)).offset(offset).limit(limit).all()
     return records
 
 @router.get("/latest", response_model=TelemetryResponse)
 def get_latest_telemetry(bus_id: str = Query("BUS-101"), db: Session = Depends(get_db)):
     """
     Retrieve the most recent telemetry observation recorded for a given bus.
-    
-    Args:
-        bus_id: Bus identifier (default: 'BUS-101').
-        db: Scoped database session.
-        
-    Returns:
-        Telemetry: Most recent telemetry data point.
     """
+    bus_id = (bus_id or "BUS-101").upper()
     record = db.query(Telemetry).filter(Telemetry.bus_id == bus_id).order_by(desc(Telemetry.timestamp)).first()
     if not record:
         record = db.query(Telemetry).order_by(desc(Telemetry.timestamp)).first()

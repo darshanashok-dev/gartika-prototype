@@ -245,13 +245,15 @@ class EventGenerator:
         
         # Determine dominant vehicle classification in the visual field
         classes = [v['class_name'] for v in tracked_vehicles]
-        dom_class = max(set(classes), key=classes.count) if classes else "CAR"
+        # Calculate average confidence of tracked objects
+        confs = [v.get('confidence', 0.8) for v in tracked_vehicles if 'confidence' in v]
+        avg_conf = round(float(np.mean(confs)), 3) if confs else 0.80
         
         event_data = {
             "event_id": event_id,
             "bus_id": bus_id,
             "event_type": "VEHICLE_COUNT",
-            "confidence": 0.90,
+            "confidence": avg_conf,
             "latitude": lat,
             "longitude": lon,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -261,6 +263,7 @@ class EventGenerator:
             "count": count,
             "location_name": f"Traffic Corridor ({lat:.4f}, {lon:.4f})"
         }
+
 
         self.recent_events.append({
             "event_type": "VEHICLE_COUNT",
