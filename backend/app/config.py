@@ -92,7 +92,7 @@ class Settings:
 
     MOBILE_DIR: Path = BASE_DIR / "mobile"
     DASHBOARD_DIR: Path = BASE_DIR / "dashboard"
-    DASHBOARD_DIST: Path = BASE_DIR / "dashboard"
+    DASHBOARD_DIST: Path = BASE_DIR / "dashboard/dist"
     
     LOCAL_IP: str = get_local_ip()
     SSL_CERT_PATH: Path = BASE_DIR / os.getenv("SSL_CERT_PATH", "cert.pem")
