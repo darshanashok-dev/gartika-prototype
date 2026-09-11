@@ -41,8 +41,8 @@ class Telemetry(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     bus_id = Column(String(50), index=True, nullable=False)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     accuracy = Column(Float, default=5.0)
     speed = Column(Float, default=0.0)
     ax = Column(Float, default=0.0)

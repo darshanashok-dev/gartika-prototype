@@ -43,12 +43,13 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=timezone.utc)
 
-    # Validate coordinate ranges (-90 to +90, -180 to +180)
-    if not (-90.0 <= t_in.latitude <= 90.0 and -180.0 <= t_in.longitude <= 180.0):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid GPS coordinates: lat={t_in.latitude}, lon={t_in.longitude}"
-        )
+    # Validate coordinate ranges (-90 to +90, -180 to +180) if coordinates are present
+    if t_in.latitude is not None and t_in.longitude is not None:
+        if not (-90.0 <= t_in.latitude <= 90.0 and -180.0 <= t_in.longitude <= 180.0):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid GPS coordinates: lat={t_in.latitude}, lon={t_in.longitude}"
+            )
 
     try:
         # Record raw telemetry
@@ -86,6 +87,7 @@ async def ingest_telemetry(t_in: TelemetryCreate, db: Session = Depends(get_db))
                 status="ONLINE"
             )
             db.add(bus)
+        db.flush()
 
         # Pass IMU and GPS reading to Sensor Fusion Engine
         fused_shock_event = fusion_engine.process_imu_telemetry(

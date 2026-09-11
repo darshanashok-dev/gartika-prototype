@@ -61,7 +61,8 @@ last_traffic_time_by_bus = {}
 @router.post("/frame")
 async def upload_frame(
     bus_id: str = Form("BUS-101"),
-    frame: UploadFile = File(...),
+    frame: Optional[UploadFile] = File(None),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -74,9 +75,13 @@ async def upload_frame(
     4. Vehicle detection with IoU object tracking & traffic density metrics.
     5. Real-time WebSocket broadcasting.
     """
+    upload_item = frame or file
+    if not upload_item:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_IMAGE", "message": "Image frame file is required."})
+
     bus_id = (bus_id or settings.GARTIKA_BUS_ID).strip().upper()
     try:
-        raw_bytes = await frame.read()
+        raw_bytes = await upload_item.read()
         if not raw_bytes:
             return {"status": "empty_frame"}
 
@@ -84,7 +89,7 @@ async def upload_frame(
         nparr = np.frombuffer(raw_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
-            return {"status": "ok", "bus_id": bus_id, "size": len(raw_bytes)}
+            raise HTTPException(status_code=400, detail={"code": "INVALID_IMAGE", "message": "Invalid or unreadable image frame."})
 
         # 1. Run road defect detection
         detected_defects = pothole_detector.detect(img)
@@ -168,9 +173,11 @@ async def upload_frame(
             "tracked_vehicles": len(tracked_objects),
             "events_created": events_created
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[STREAM] Error handling live frame for {bus_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail={"code": "STREAM_ERROR", "message": "Failed to process live stream frame."})
 
 @router.get("/latest-frame")
 def get_latest_frame(bus_id: Optional[str] = Query(None)):

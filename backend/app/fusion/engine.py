@@ -577,8 +577,8 @@ class SensorFusionEngine:
         - If defect/impact persists -> mark REPAIR_FAILED / ISSUE_PERSISTS.
         """
         repaired_defects = db.query(RoadDefect).filter(
-            RoadDefect.repair_status.in_(["REPAIRED", "PENDING_VERIFICATION"]),
-            RoadDefect.status.in_(["REPAIRED", "IN_PROGRESS", "PENDING_VERIFICATION"])
+            RoadDefect.repair_status.in_(["REPAIRED", "PENDING_VERIFICATION", "REPAIR_PENDING"]),
+            RoadDefect.status.in_(["REPAIRED", "IN_PROGRESS", "PENDING_VERIFICATION", "REPAIR_PENDING"])
         ).all()
 
         now = datetime.now(timezone.utc)
