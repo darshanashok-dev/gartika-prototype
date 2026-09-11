@@ -13,8 +13,8 @@ class ObservationBase(BaseModel):
     """Base fields for a sensor observation."""
     defect_id: Optional[str] = None
     bus_id: str
-    latitude: float = Field(..., ge=-90.0, le=90.0)
-    longitude: float = Field(..., ge=-180.0, le=180.0)
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
     speed: Optional[float] = None
     heading: Optional[float] = None
     source: str = "sensor_fusion"  # yolo, opencv_heuristic, imu_shock, sensor_fusion
@@ -43,8 +43,9 @@ class RoadDefectBase(BaseModel):
     """Base fields for persistent road defects."""
     defect_id: Optional[str] = None
     defect_type: str = "POTHOLE"  # POTHOLE, CRACK, SPEED_BREAKER, MANHOLE, WATERLOGGING, ROAD_ANOMALY
-    latitude: float = Field(..., ge=-90.0, le=90.0)
-    longitude: float = Field(..., ge=-180.0, le=180.0)
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    location_status: str = "GEOCODED"
     severity: str = "MEDIUM"  # LOW, MEDIUM, HIGH, CRITICAL
     status: str = "UNVERIFIED"  # UNVERIFIED, SUSPECTED, VERIFIED, HIGH_CONFIDENCE, WORK_ORDER_CREATED, ASSIGNED, IN_PROGRESS, REPAIRED, REPAIR_VERIFIED, REPAIR_FAILED, CLOSED
     best_confidence: float = 0.0

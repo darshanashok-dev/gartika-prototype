@@ -72,8 +72,9 @@ class VisualCandidate:
     defect_type: str  # POTHOLE, CRACK, SPEED_BREAKER, MANHOLE, WATERLOGGING, ROAD_PATCH
     bbox: List[int]   # [x1, y1, x2, y2]
     source: str       # "yolo" | "opencv_heuristic"
-    confidence: float # Model confidence or calibrated score
-    heuristic_score: Optional[float] = None
+    confidence: float # Final visual score
+    model_confidence: Optional[float] = None  # Trained neural network probability (0.00-1.00)
+    heuristic_score: Optional[float] = None   # Computer vision contrast/contour heuristic score (0.00-1.00)
     area: int = 0
     aspect_ratio: float = 1.0
 
@@ -81,9 +82,10 @@ class VisualCandidate:
 class ImpactCandidate:
     """Mechanical impact shock detected on IMU accelerometer."""
     timestamp: float
-    shock_magnitude: float  # |az - 9.81|
+    shock_magnitude: float  # Deviation from baseline gravity
     peak_az: float
     severity: str  # LOW, MEDIUM, HIGH, CRITICAL
+    imu_score: float = 0.0  # Normalized shock score (0.00-1.00)
     duration_ms: float = 100.0
 
 @dataclass
@@ -101,13 +103,18 @@ class SensorSnapshot:
 @dataclass
 class FusionResult:
     """
-    Outcome of multi-modal sensor fusion evaluation.
+    Outcome of multi-modal sensor fusion evaluation with transparent score breakdown.
     """
     event_type: str  # POTHOLE, SPEED_BREAKER, ROAD_ANOMALY, POTHOLE_CANDIDATE, VEHICLE_COUNT, etc.
     final_confidence: float
     severity: str
     vibration_level: str  # NORMAL, MEDIUM, HIGH
     source: str           # "sensor_fusion", "yolo_visual_only", "imu_shock_only", "opencv_heuristic"
+    model_confidence: Optional[float] = None
+    heuristic_score: Optional[float] = None
+    imu_score: Optional[float] = None
+    fusion_score: Optional[float] = None
+    verification_score: Optional[float] = None
     evidence_frame_bgr: Optional[np.ndarray] = None
     bbox: Optional[List[int]] = None
     visual_candidate: Optional[VisualCandidate] = None

@@ -27,8 +27,9 @@ class RoadDefect(Base):
     id = Column(Integer, primary_key=True, index=True)
     defect_id = Column(String(50), unique=True, index=True, nullable=False)
     defect_type = Column(String(50), index=True, nullable=False)  # POTHOLE, CRACK, SPEED_BREAKER, MANHOLE, WATERLOGGING, ROAD_ANOMALY
-    latitude = Column(Float, index=True, nullable=False)
-    longitude = Column(Float, index=True, nullable=False)
+    latitude = Column(Float, index=True, nullable=True)
+    longitude = Column(Float, index=True, nullable=True)
+    location_status = Column(String(20), default="GEOCODED", index=True)  # GEOCODED, UNKNOWN_LOCATION
     severity = Column(String(20), default="MEDIUM", index=True)  # LOW, MEDIUM, HIGH, CRITICAL
     status = Column(String(30), default="UNVERIFIED", index=True)  # UNVERIFIED, SUSPECTED, VERIFIED, HIGH_CONFIDENCE, WORK_ORDER_CREATED, ASSIGNED, IN_PROGRESS, REPAIRED, REPAIR_VERIFIED, REPAIR_FAILED, CLOSED
     
@@ -62,8 +63,8 @@ class Observation(Base):
     defect_id = Column(String(50), index=True, nullable=False)
     bus_id = Column(String(50), index=True, nullable=False)
     timestamp = Column(DateTime, default=utc_now, index=True)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     speed = Column(Float, nullable=True)
     heading = Column(Float, nullable=True)
     

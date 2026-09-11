@@ -27,9 +27,17 @@ class BusSensorBuffer:
         self.latest_imu: Optional[ImuReading] = None
         self.last_sequence_number: Optional[int] = None
         self.last_activity_time: float = time.time()
+        self.estimated_baseline_gravity: float = 9.81
+        self.gravity_samples_count: int = 0
 
     def add_imu(self, reading: ImuReading, sequence_number: Optional[int] = None):
-        """Append an IMU reading to vehicle ring buffer."""
+        """Append an IMU reading to vehicle ring buffer with dynamic baseline gravity calibration."""
+        # Update baseline gravity running average when vehicle is not experiencing severe shock
+        if 8.0 < reading.az < 11.5:
+            self.gravity_samples_count += 1
+            alpha = min(0.05, 1.0 / max(1, self.gravity_samples_count))
+            self.estimated_baseline_gravity = (1 - alpha) * self.estimated_baseline_gravity + alpha * reading.az
+        
         self.imu_buffer.append(reading)
         self.latest_imu = reading
         self.last_activity_time = time.time()

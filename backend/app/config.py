@@ -62,11 +62,21 @@ class Settings:
     CONFIDENCE_THRESHOLD: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.45"))
     FUSION_TEMPORAL_WINDOW_MS: int = int(os.getenv("FUSION_TEMPORAL_WINDOW_MS", "500"))
     SPATIAL_DEDUP_METERS: float = float(os.getenv("SPATIAL_DEDUP_METERS", "15.0"))
+    SPATIAL_DEDUP_WINDOW_SECONDS: int = int(os.getenv("SPATIAL_DEDUP_WINDOW_SECONDS", "300"))
+    
+    # IMU Configurable Thresholds & Filtering
+    IMU_VERTICAL_SHOCK_THRESHOLD: float = float(os.getenv("IMU_VERTICAL_SHOCK_THRESHOLD", "3.2"))
+    IMU_ABSOLUTE_Z_THRESHOLD: float = float(os.getenv("IMU_ABSOLUTE_Z_THRESHOLD", "13.5"))
+    IMU_FRAME_ALIGNMENT_WINDOW_MS: int = int(os.getenv("IMU_FRAME_ALIGNMENT_WINDOW_MS", "800"))
+    IMU_NOISE_FLOOR: float = float(os.getenv("IMU_NOISE_FLOOR", "0.25"))
+    IMU_COOLDOWN_SECONDS: float = float(os.getenv("IMU_COOLDOWN_SECONDS", "4.0"))
+    REPAIR_VERIFICATION_CLEAN_COUNT: int = int(os.getenv("REPAIR_VERIFICATION_CLEAN_COUNT", "2"))
     
     # Security & Auth
     DEVICE_AUTH_ENABLED: bool = os.getenv("DEVICE_AUTH_ENABLED", "false").lower() in ("true", "1", "yes")
     DEVICE_API_KEY: str = os.getenv("DEVICE_API_KEY", "gartika_dev_device_token_secret")
     JWT_SECRET: str = os.getenv("JWT_SECRET", "gartika_jwt_secret_change_in_production")
+    WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "false").lower() in ("true", "1", "yes")
 
     # Database Configuration (SQLite / PostgreSQL / PostGIS)
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'gartika.db'}")

@@ -14,7 +14,7 @@ import time
 import json
 import uuid
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any
 import cv2
@@ -58,10 +58,18 @@ class SensorFusionEngine:
     def __init__(
         self,
         temporal_window_ms: int = settings.FUSION_TEMPORAL_WINDOW_MS,
-        spatial_dedup_meters: float = settings.SPATIAL_DEDUP_METERS
+        spatial_dedup_meters: float = settings.SPATIAL_DEDUP_METERS,
+        spatial_dedup_window_seconds: int = settings.SPATIAL_DEDUP_WINDOW_SECONDS,
+        vertical_shock_threshold: float = settings.IMU_VERTICAL_SHOCK_THRESHOLD,
+        absolute_z_threshold: float = settings.IMU_ABSOLUTE_Z_THRESHOLD,
+        clean_repair_threshold: int = settings.REPAIR_VERIFICATION_CLEAN_COUNT
     ):
         self.temporal_window_ms = temporal_window_ms
         self.spatial_dedup_meters = spatial_dedup_meters
+        self.spatial_dedup_window_seconds = spatial_dedup_window_seconds
+        self.vertical_shock_threshold = vertical_shock_threshold
+        self.absolute_z_threshold = absolute_z_threshold
+        self.clean_repair_threshold = clean_repair_threshold
 
     def process_frame(
         self,
@@ -85,7 +93,7 @@ class SensorFusionEngine:
         )
         buf.add_frame(frame_reading)
 
-        # Retrieve GPS
+        # Retrieve GPS (strict: never fabricate fallback coordinates)
         lat, lon, speed, heading = None, None, 0.0, None
         if gps_override and gps_override[0] is not None and gps_override[1] is not None:
             lat, lon = gps_override
@@ -146,8 +154,8 @@ class SensorFusionEngine:
     def process_imu_telemetry(
         self,
         bus_id: str,
-        lat: float,
-        lon: float,
+        lat: Optional[float],
+        lon: Optional[float],
         ax: float,
         ay: float,
         az: float,
@@ -159,7 +167,7 @@ class SensorFusionEngine:
     ) -> Optional[Dict]:
         """
         Ingest IMU shock telemetry, buffer it, and check for impact events.
-        Does NOT blindly claim a pothole on every spike; classifies as ROAD_IMPACT or fuses with recent frame.
+        Classifies as ROAD_IMPACT or fuses with recent frame from same bus.
         """
         now_ts = timestamp_sec or time.time()
         buf = buffer_manager.get_buffer(bus_id)
@@ -180,11 +188,13 @@ class SensorFusionEngine:
             )
             buf.add_gps(gps_reading, sequence_number=sequence_number)
 
-        # Check for vertical accelerometer shock (> 13.5 m/s² or |az - 9.81| > 3.2 m/s²)
-        shock_mag = imu_reading.vertical_shock
-        if shock_mag > 3.2 or az > 13.5:
+        # Check for vertical accelerometer shock using calibrated baseline gravity
+        baseline_g = buf.estimated_baseline_gravity
+        shock_mag = abs(az - baseline_g)
+        
+        if shock_mag > self.vertical_shock_threshold or az > self.absolute_z_threshold:
             # Check for aligned camera frame from this specific bus
-            aligned_frame = buf.get_aligned_frame(now_ts, window_ms=800)
+            aligned_frame = buf.get_aligned_frame(now_ts, window_ms=settings.IMU_FRAME_ALIGNMENT_WINDOW_MS)
             
             # Severity classification based on physical shock
             if shock_mag > 6.0 or az > 16.0:
@@ -197,26 +207,33 @@ class SensorFusionEngine:
                 severity = "LOW"
                 vib_level = "MEDIUM"
 
+            imu_score = round(min(0.95, 0.40 + min(0.50, shock_mag * 0.08)), 2)
             impact_cand = ImpactCandidate(
                 timestamp=now_ts,
                 shock_magnitude=shock_mag,
                 peak_az=az,
-                severity=severity
+                severity=severity,
+                imu_score=imu_score
             )
 
             # Check if there is an aligned frame to save evidence
-            evidence_path = None
             evidence_bgr = None
             if aligned_frame and aligned_frame.frame_bytes:
                 nparr = np.frombuffer(aligned_frame.frame_bytes, np.uint8)
                 evidence_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
+            final_conf = min(0.88, round(0.50 + min(0.35, shock_mag * 0.06), 2))
             fusion_res = FusionResult(
                 event_type="ROAD_IMPACT",  # Non-overclaiming intermediate classification
-                final_confidence=min(0.88, 0.55 + min(0.30, shock_mag * 0.05)),
+                final_confidence=final_conf,
                 severity=severity,
                 vibration_level=vib_level,
                 source="imu_shock_only" if not aligned_frame else "sensor_fusion",
+                model_confidence=None,
+                heuristic_score=None,
+                imu_score=imu_score,
+                fusion_score=final_conf,
+                verification_score=None,
                 evidence_frame_bgr=evidence_bgr,
                 impact_candidate=impact_cand,
                 is_verified_by_fusion=bool(aligned_frame)
@@ -244,10 +261,13 @@ class SensorFusionEngine:
     ) -> FusionResult:
         """
         Combine visual candidate with temporally-aligned IMU reading.
+        Maintains distinct model_confidence vs heuristic_score vs imu_score.
         """
         v_type = visual_det.get("event_type", visual_det.get("class", "POTHOLE")).upper()
         raw_conf = visual_det.get("confidence", 0.60)
         source = visual_det.get("source", "yolo" if raw_conf > 0.65 else "opencv_heuristic")
+        model_conf = visual_det.get("model_confidence") if source == "yolo" else None
+        heuristic_score = visual_det.get("heuristic_score") if source != "yolo" else None
         bbox = visual_det.get("bbox", [])
         area = visual_det.get("area", 0)
 
@@ -260,6 +280,8 @@ class SensorFusionEngine:
             bbox=bbox,
             source=source,
             confidence=raw_conf,
+            model_confidence=model_conf,
+            heuristic_score=heuristic_score,
             area=area
         )
 
@@ -268,56 +290,57 @@ class SensorFusionEngine:
         vibration_level = "NORMAL"
         impact_cand = None
         is_verified = False
+        imu_score = None
 
         if aligned_imu:
             shock = aligned_imu.vertical_shock
-            if shock > 3.0 or aligned_imu.az > 13.5:
+            if shock > self.vertical_shock_threshold or aligned_imu.az > self.absolute_z_threshold:
                 vibration_level = "HIGH"
                 imu_boost = 0.15
                 is_verified = True
+                imu_score = round(min(0.95, 0.50 + shock * 0.08), 2)
                 impact_cand = ImpactCandidate(
                     timestamp=aligned_imu.timestamp,
                     shock_magnitude=shock,
                     peak_az=aligned_imu.az,
-                    severity="HIGH" if shock > 5.0 else "MEDIUM"
+                    severity="HIGH" if shock > 5.0 else "MEDIUM",
+                    imu_score=imu_score
                 )
             elif shock > 1.5:
                 vibration_level = "MEDIUM"
                 imu_boost = 0.08
                 is_verified = True
+                imu_score = round(min(0.75, 0.35 + shock * 0.08), 2)
                 impact_cand = ImpactCandidate(
                     timestamp=aligned_imu.timestamp,
                     shock_magnitude=shock,
                     peak_az=aligned_imu.az,
-                    severity="LOW"
+                    severity="LOW",
+                    imu_score=imu_score
                 )
 
-        # Determine final event type & calibrated score
-        if v_type == "POTHOLE" and vibration_level == "HIGH":
-            final_type = "POTHOLE"
-        elif v_type == "SPEED_BREAKER" and vibration_level in ("MEDIUM", "HIGH"):
-            final_type = "SPEED_BREAKER"
-        elif v_type == "POTHOLE" and vibration_level == "NORMAL":
-            final_type = "POTHOLE"
-        else:
-            final_type = v_type
-
-        final_conf = min(0.99, round(raw_conf + imu_boost, 3))
+        final_type = v_type
+        fusion_score = min(0.99, round(raw_conf + imu_boost, 3))
         
-        # Severity assignment based on area, confidence, and shock
-        if area > 18000 or final_conf > 0.88 or vibration_level == "HIGH":
+        # Severity assignment based on physical footprint, confidence, and shock
+        if area > 18000 or fusion_score > 0.88 or vibration_level == "HIGH":
             severity = "HIGH"
-        elif area > 6000 or final_conf > 0.75:
+        elif area > 6000 or fusion_score > 0.75:
             severity = "MEDIUM"
         else:
             severity = "LOW"
 
         return FusionResult(
             event_type=final_type,
-            final_confidence=final_conf,
+            final_confidence=fusion_score,
             severity=severity,
             vibration_level=vibration_level,
             source="sensor_fusion" if aligned_imu else source,
+            model_confidence=model_conf,
+            heuristic_score=heuristic_score,
+            imu_score=imu_score,
+            fusion_score=fusion_score,
+            verification_score=None,
             evidence_frame_bgr=img_bgr,
             bbox=bbox,
             visual_candidate=v_cand,
@@ -339,6 +362,7 @@ class SensorFusionEngine:
         """
         Deduplicate against persistent RoadDefect database entities, save evidence,
         and generate synchronized Event and Observation records.
+        Strict: Missing GPS sets coordinates to None and status to UNKNOWN_LOCATION (no fake coords).
         """
         now = datetime.now(timezone.utc)
         now_ts = int(time.time())
@@ -354,20 +378,27 @@ class SensorFusionEngine:
                 bus_id=bus_id
             )
 
-        # 1. Spatial Deduplication Check (if GPS is valid)
+        # 1. Spatial Deduplication Check (only if GPS is valid)
         existing_defect: Optional[RoadDefect] = None
         if lat is not None and lon is not None:
-            # Query nearby defects of matching category
-            candidates = db.query(RoadDefect).filter(
+            # Query nearby defects of matching category within time window
+            cutoff_time = now - timedelta(seconds=self.spatial_dedup_window_seconds) if hasattr(now, '__sub__') else None
+            query = db.query(RoadDefect).filter(
                 RoadDefect.defect_type == fusion_res.event_type,
-                RoadDefect.status.notin_(["CLOSED", "REPAIR_VERIFIED"])
-            ).all()
+                RoadDefect.status.notin_(["CLOSED", "REPAIR_VERIFIED"]),
+                RoadDefect.latitude.isnot(None),
+                RoadDefect.longitude.isnot(None)
+            )
+            if cutoff_time:
+                query = query.filter(RoadDefect.last_seen >= cutoff_time)
+            candidates = query.all()
 
             for d in candidates:
-                dist = haversine_distance(lat, lon, d.latitude, d.longitude)
-                if dist <= self.spatial_dedup_meters:
-                    existing_defect = d
-                    break
+                if d.latitude is not None and d.longitude is not None:
+                    dist = haversine_distance(lat, lon, d.latitude, d.longitude)
+                    if dist <= self.spatial_dedup_meters:
+                        existing_defect = d
+                        break
 
         if existing_defect:
             # Merge observation into existing persistent RoadDefect
@@ -414,12 +445,14 @@ class SensorFusionEngine:
             else:
                 init_status = "SUSPECTED"
 
-            loc_name = f"Road Section ({lat:.4f}, {lon:.4f})" if (lat and lon) else "Urban Road Corridor"
+            loc_status = "GEOCODED" if (lat is not None and lon is not None) else "UNKNOWN_LOCATION"
+            loc_name = f"Road Section ({lat:.4f}, {lon:.4f})" if (lat is not None and lon is not None) else "Awaiting GPS Position"
             db_defect = RoadDefect(
                 defect_id=defect_id,
                 defect_type=fusion_res.event_type,
-                latitude=lat if lat is not None else 12.9716,
-                longitude=lon if lon is not None else 77.5946,
+                latitude=lat,
+                longitude=lon,
+                location_status=loc_status,
                 severity=fusion_res.severity,
                 status=init_status,
                 first_seen=now,
@@ -441,8 +474,8 @@ class SensorFusionEngine:
             defect_id=defect_id,
             bus_id=bus_id,
             timestamp=now,
-            latitude=lat if lat is not None else 12.9716,
-            longitude=lon if lon is not None else 77.5946,
+            latitude=lat,
+            longitude=lon,
             speed=speed,
             heading=heading,
             source=fusion_res.source,
@@ -520,6 +553,10 @@ class SensorFusionEngine:
             "observation_count": db_defect.observation_count,
             "unique_bus_count": db_defect.unique_bus_count,
             "vibration_level": db_event.vibration_level,
+            "model_confidence": fusion_res.model_confidence,
+            "heuristic_score": fusion_res.heuristic_score,
+            "imu_score": fusion_res.imu_score,
+            "fusion_score": fusion_res.fusion_score,
             "timestamp": db_event.timestamp.isoformat()
         }
 
@@ -534,34 +571,31 @@ class SensorFusionEngine:
     ):
         """
         Closed-Loop Repair Verification.
+        Requires configurable consecutive clean observations (settings.REPAIR_VERIFICATION_CLEAN_COUNT).
         When a vehicle passes within 15m of a defect previously marked REPAIRED:
-        - If NO defect is detected & IMU is smooth -> mark REPAIR_VERIFIED & CLOSED.
+        - If clean observations reach threshold -> mark REPAIR_VERIFIED & CLOSED.
         - If defect/impact persists -> mark REPAIR_FAILED / ISSUE_PERSISTS.
         """
         repaired_defects = db.query(RoadDefect).filter(
             RoadDefect.repair_status.in_(["REPAIRED", "PENDING_VERIFICATION"]),
-            RoadDefect.status.in_(["REPAIRED", "IN_PROGRESS"])
+            RoadDefect.status.in_(["REPAIRED", "IN_PROGRESS", "PENDING_VERIFICATION"])
         ).all()
 
         now = datetime.now(timezone.utc)
-        has_shock = (aligned_imu and (aligned_imu.vertical_shock > 3.0 or aligned_imu.az > 13.5))
+        has_shock = (aligned_imu and (aligned_imu.vertical_shock > self.vertical_shock_threshold or aligned_imu.az > self.absolute_z_threshold))
 
         for defect in repaired_defects:
+            if defect.latitude is None or defect.longitude is None:
+                continue
             dist = haversine_distance(lat, lon, defect.latitude, defect.longitude)
             if dist <= self.spatial_dedup_meters:
                 if not has_visual_defect and not has_shock:
-                    # Repair successfully validated!
-                    defect.status = "CLOSED"
-                    defect.repair_status = "REPAIR_VERIFIED"
-                    defect.repair_verified_at = now
-                    defect.repair_verified_by_bus_id = bus_id
-                    
-                    # Update associated work order
-                    if defect.work_order_id:
-                        wo = db.query(WorkOrder).filter(WorkOrder.work_order_id == defect.work_order_id).first()
-                        if wo:
-                            wo.status = "RESOLVED"
-                            wo.completed_at = now
+                    # Count existing clean repair check observations for this defect
+                    clean_checks = db.query(Observation).filter(
+                        Observation.defect_id == defect.defect_id,
+                        Observation.is_repair_check == True,
+                        Observation.repair_check_result == "CONFIRMED_REPAIRED"
+                    ).count() + 1
 
                     # Add observation check record
                     obs = Observation(
@@ -576,8 +610,27 @@ class SensorFusionEngine:
                         repair_check_result="CONFIRMED_REPAIRED"
                     )
                     db.add(obs)
+
+                    if clean_checks >= self.clean_repair_threshold:
+                        # Repair successfully validated across multiple observations!
+                        defect.status = "CLOSED"
+                        defect.repair_status = "REPAIR_VERIFIED"
+                        defect.repair_verified_at = now
+                        defect.repair_verified_by_bus_id = bus_id
+                        
+                        # Update associated work order
+                        if defect.work_order_id:
+                            wo = db.query(WorkOrder).filter(WorkOrder.work_order_id == defect.work_order_id).first()
+                            if wo:
+                                wo.status = "RESOLVED"
+                                wo.completed_at = now
+
+                        logger.info(f"[REPAIR VERIFIED] Defect {defect.defect_id} confirmed repaired after {clean_checks} clean passes by {bus_id} at {lat:.5f}, {lon:.5f}")
+                    else:
+                        defect.repair_status = "PENDING_VERIFICATION"
+                        logger.info(f"[REPAIR PASS] Clean observation {clean_checks}/{self.clean_repair_threshold} recorded for defect {defect.defect_id} by {bus_id}")
+
                     db.commit()
-                    logger.info(f"[REPAIR VERIFIED] Defect {defect.defect_id} confirmed repaired by {bus_id} at {lat:.5f}, {lon:.5f}")
 
                 elif has_visual_defect or has_shock:
                     # Repair failed / issue persists
@@ -596,7 +649,7 @@ class SensorFusionEngine:
                     )
                     db.add(obs)
                     db.commit()
-                    logger.warning(f"[REPAIR FAILED] Defect {defect.defect_id} still persists after repair! Verified by {bus_id}")
+                    logger.warning(f"[REPAIR FAILED] Defect {defect.defect_id} still persists after repair! Detected by {bus_id}")
 
     def save_annotated_evidence(
         self,

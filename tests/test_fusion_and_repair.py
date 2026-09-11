@@ -121,7 +121,7 @@ def test_closed_loop_repair_verification(db_session):
 
     smooth_imu = ImuReading(timestamp=time.time(), ax=0.0, ay=0.0, az=9.81)
 
-    # Bus traverses repair spot with no visual defect and smooth IMU
+    # 1st clean pass -> records observation, stays PENDING_VERIFICATION
     fusion_engine.check_repair_verification(
         bus_id="BUS-01",
         lat=12.97202,
@@ -130,11 +130,96 @@ def test_closed_loop_repair_verification(db_session):
         aligned_imu=smooth_imu,
         db=db_session
     )
+    db_session.refresh(defect)
+    assert defect.repair_status == "PENDING_VERIFICATION"
 
+    # 2nd clean pass -> satisfies clean_repair_threshold (2), closes defect!
+    fusion_engine.check_repair_verification(
+        bus_id="BUS-02",
+        lat=12.97201,
+        lon=77.59502,
+        has_visual_defect=False,
+        aligned_imu=smooth_imu,
+        db=db_session
+    )
     db_session.refresh(defect)
     assert defect.status == "CLOSED"
     assert defect.repair_status == "REPAIR_VERIFIED"
-    assert defect.repair_verified_by_bus_id == "BUS-01"
+    assert defect.repair_verified_by_bus_id == "BUS-02"
+
+
+def test_closed_loop_repair_failure(db_session):
+    """Test that a defect marked REPAIRED is flagged REPAIR_FAILED if shock/visual persists."""
+    defect = RoadDefect(
+        defect_id="DEF-TEST-888",
+        defect_type="POTHOLE",
+        latitude=12.97300,
+        longitude=77.59600,
+        severity="HIGH",
+        status="REPAIRED",
+        repair_status="PENDING_VERIFICATION",
+        verifying_buses='["BUS-01"]',
+        unique_bus_count=1,
+        observation_count=1
+    )
+    db_session.add(defect)
+    db_session.commit()
+
+    bumpy_imu = ImuReading(timestamp=time.time(), ax=0.0, ay=0.0, az=18.0)
+    fusion_engine.check_repair_verification(
+        bus_id="BUS-02",
+        lat=12.97301,
+        lon=77.59602,
+        has_visual_defect=True,
+        aligned_imu=bumpy_imu,
+        db=db_session
+    )
+    db_session.refresh(defect)
+    assert defect.status == "REPAIR_FAILED"
+    assert defect.repair_status == "REPAIR_FAILED"
+
+
+def test_missing_gps_handling(db_session):
+    """Test that missing GPS telemetry does NOT generate hardcoded fallback coordinates."""
+    # Process IMU shock without coordinates
+    fusion_engine.process_imu_telemetry(
+        bus_id="BUS-NO-GPS",
+        ax=0.0,
+        ay=0.0,
+        az=19.5,
+        lat=None,
+        lon=None,
+        speed=15.0,
+        heading=90.0,
+        sequence_number=1,
+        db=db_session
+    )
+
+    defect = db_session.query(RoadDefect).filter(RoadDefect.location_status == "UNKNOWN_LOCATION").first()
+    assert defect is not None
+    assert defect.latitude is None
+    assert defect.longitude is None
+    assert defect.location_status == "UNKNOWN_LOCATION"
+
+
+def test_authentication_and_authorization():
+    """Test token verification and role permissions."""
+    from backend.app.auth import verify_api_token, UserRole
+
+    # Valid mobile unit token
+    mobile_user = verify_api_token("mobile-bus-token-secret")
+    assert mobile_user is not None
+    assert mobile_user.role == UserRole.MOBILE_UNIT
+
+    # Valid admin token
+    admin_user = verify_api_token("admin-super-token-secret")
+    assert admin_user is not None
+    assert admin_user.role == UserRole.ADMIN
+
+    # Invalid token
+    invalid_user = verify_api_token("completely-invalid-token")
+    assert invalid_user is None
+
 
 def test_api_v1_endpoints(db_session):
     """Test versioned /api/v1 defect endpoints."""

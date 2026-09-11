@@ -112,8 +112,10 @@ class PotholeDetector:
                             "bbox": [int(x1), int(y1), int(x2), int(y2)],
                             "event_type": cls_name,
                             "confidence": round(float(final_conf), 2),
+                            "model_confidence": round(float(conf), 2),
+                            "heuristic_score": None,
                             "source": "yolo",
-                            "verified": True,
+                            "verified": False,
                             "severity": severity,
                             "vibration_level": vibration_level,
                             "area": int((x2 - x1) * (y2 - y1))

@@ -108,11 +108,17 @@ app.mount("/mobile", StaticFiles(directory=str(settings.MOBILE_DIR), html=True),
 
 # Real-time WebSocket endpoint
 @app.websocket("/ws/events")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = None):
     """
     WebSocket endpoint for bidirectional real-time communication with dashboards.
-    Accepts connections, listens for ping-pongs, and handles graceful disconnection.
+    Accepts connections, validates optional token authentication, listens for ping-pongs,
+    and handles graceful disconnection.
     """
+    from backend.app.auth import validate_websocket_auth
+    is_authed = await validate_websocket_auth(websocket, token=token)
+    if not is_authed:
+        return
+
     await manager.connect(websocket)
     try:
         while True:
