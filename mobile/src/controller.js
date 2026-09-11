@@ -2,12 +2,12 @@
  * Central Mobile Sensor Controller for Gartika Edge Sensing Unit.
  * 
  * Coordinates:
- * - Camera capture lifecycle
- * - GPS / GNSS tracking
- * - 3-Axis IMU motion & vibration sensing
- * - Offline-first IndexedDB queueing & exponential backoff sync
- * - Connection manager (Network, Backend Health, WebSocket)
- * - Temporal sensor alignment & telemetry batch dispatch
+ * - Camera capture lifecycle & frame preprocessing
+ * - GNSS GPS location tracking with staleness/quality classification
+ * - 3-Axis IMU motion & vertical impact sensing with dynamic baseline gravity calibration
+ * - Spatiotemporal sensor association (Frame + Aligned GPS + Aligned IMU)
+ * - Offline-first IndexedDB persistence with exponential backoff synchronization
+ * - Connection manager (WebSocket, HTTP REST, RTT latency monitoring)
  */
 
 class MobileSensorController {
@@ -19,18 +19,24 @@ class MobileSensorController {
     
     this.isSensing = false;
     this.isPaused = false;
+    this.sequenceNumber = 1;
+    this.isUploadingFrame = false;
     
-    // Performance & telemetry metrics
+    // Performance & Diagnostic Metrics
     this.metrics = {
       framesCaptured: 0,
       framesUploaded: 0,
       framesDropped: 0,
+      failedUploads: 0,
       telemetrySent: 0,
       telemetryQueued: 0,
       detectionsCount: 0,
-      failedUploads: 0,
       lastTelemetryTime: 0,
-      lastFrameTime: 0
+      lastFrameTime: 0,
+      lastUploadLatencyMs: 0,
+      lastUploadStatus: "STANDBY",
+      measuredCaptureFps: 0.0,
+      aiLatencyMs: 0
     };
 
     // Subsystems
@@ -43,30 +49,44 @@ class MobileSensorController {
     this.gps = new GpsSensorManager({
       onLocationUpdate: (loc) => this.handleLocationUpdate(loc),
       onStateChange: (state, detail) => this.onSensorStateChange("GPS", state, detail),
-      onError: (err) => this.log(err, "error")
+      onError: (err) => this.log(`[GPS] ${err}`, "error")
     });
 
     this.imu = new ImuSensorManager({
       onReading: (r) => this.handleImuReading(r),
       onShockDetected: (shock) => this.handleImuShock(shock),
       onStateChange: (state, detail) => this.onSensorStateChange("IMU", state, detail),
-      onError: (err) => this.log(err, "error")
+      onError: (err) => this.log(`[IMU] ${err}`, "error")
     });
 
-    this.camera = null; // initialized with video DOM element
+    this.camera = null;
     this.telemetryInterval = null;
     
     // UI Callbacks
     this.onStatusUpdate = options.onStatusUpdate || (() => {});
     this.onLog = options.onLog || (() => {});
+
+    // Visibility change handler (avoids duplicate stream creation)
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (this.isSensing && !this.isPaused && this.camera) {
+          this.camera.pause();
+        }
+      } else {
+        if (this.isSensing && !this.isPaused && this.camera) {
+          this.camera.resume();
+        }
+      }
+    });
   }
 
-  setVideoElement(videoEl) {
+  setVideoElement(videoEl, canvasEl = null) {
     this.camera = new CameraManager(videoEl, {
-      aiCaptureIntervalMs: 1500,
+      canvasElement: canvasEl,
+      aiCaptureIntervalMs: 1200, // 0.83 FPS capture for inference
       onFrameCaptured: (blob, meta) => this.handleFrameCaptured(blob, meta),
       onStateChange: (state, detail) => this.onSensorStateChange("CAMERA", state, detail),
-      onError: (err) => this.log(err, "warn")
+      onError: (err) => this.log(`[CAMERA] ${err}`, "warn")
     });
   }
 
@@ -98,7 +118,7 @@ class MobileSensorController {
 
   handleImuShock(shock) {
     this.log(`⚠️ Mechanical Road Shock Detected! Vertical Δz: ${shock.gravity_compensated_z} m/s² (Score: ${shock.shock_score})`, "warn");
-    // Trigger immediate visual frame capture to pair with shock anomaly
+    // Trigger immediate visual frame capture to associate with shock anomaly
     if (this.camera && this.isSensing && !this.isPaused) {
       this.camera.captureFrame();
     }
@@ -129,7 +149,7 @@ class MobileSensorController {
     this.telemetryInterval = setInterval(() => this.dispatchTelemetry(), 1000);
 
     this.notifyStatus();
-    this.log(`✅ Mobile Sensing Active on ${this.busId}. Forward road monitoring engaged.`, "info");
+    this.log(`✅ Mobile Sensing Active on ${this.busId}. Forward roadway monitoring engaged.`, "info");
   }
 
   pauseSensing() {
@@ -165,7 +185,7 @@ class MobileSensorController {
     this.imu.stop();
     this.conn.stop();
 
-    this.log("🛑 Sensing halted. All hardware streams released.", "warn");
+    this.log("🛑 Sensing halted. Hardware streams released.", "warn");
     this.notifyStatus();
   }
 
@@ -175,10 +195,12 @@ class MobileSensorController {
     const gpsReading = this.gps.getReading();
     const imuReading = this.imu.getReading();
     const nowMs = Date.now();
+    const seq = this.sequenceNumber++;
 
     const payload = {
       bus_id: this.busId,
       device_id: this.deviceId,
+      sequence_number: seq,
       latitude: gpsReading ? gpsReading.latitude : null,
       longitude: gpsReading ? gpsReading.longitude : null,
       accuracy: gpsReading ? gpsReading.accuracy : null,
@@ -188,6 +210,8 @@ class MobileSensorController {
       ay: imuReading ? imuReading.ay : 0.0,
       az: imuReading ? imuReading.az : 9.81,
       gravity_compensated_z: imuReading ? imuReading.gravity_compensated_z : 0.0,
+      shock_score: imuReading ? imuReading.shock_score : 0.0,
+      vibration_level: imuReading ? imuReading.vibration_level : "NORMAL",
       timestamp: new Date().toISOString()
     };
 
@@ -219,46 +243,97 @@ class MobileSensorController {
     this.notifyStatus();
   }
 
+  /**
+   * Spatiotemporal Sensor Association & Frame Upload
+   */
   async handleFrameCaptured(blob, meta) {
-    if (!this.isSensing || this.isPaused) return;
+    if (!this.isSensing || this.isPaused || this.isUploadingFrame) return;
 
-    this.metrics.framesCaptured++;
-    const gpsReading = this.gps.getReading();
-    const formData = new FormData();
-    formData.append("file", blob, `frame_${Date.now()}.jpg`);
-    formData.append("bus_id", this.busId);
-    formData.append("device_id", this.deviceId);
+    this.isUploadingFrame = true;
+    const uploadStartMs = Date.now();
 
-    if (gpsReading && !gpsReading.is_stale) {
-      formData.append("latitude", gpsReading.latitude.toString());
-      formData.append("longitude", gpsReading.longitude.toString());
-      formData.append("accuracy", gpsReading.accuracy.toString());
-    }
+    try {
+      this.metrics.framesCaptured++;
+      this.metrics.lastFrameTime = meta.capture_timestamp || uploadStartMs;
+      
+      const gpsReading = this.gps.getReading();
+      const imuReading = this.imu.getReading();
+      const seq = this.sequenceNumber++;
 
-    if (this.conn.backendOnline) {
-      try {
+      const formData = new FormData();
+      formData.append("file", blob, `${meta.frame_id || ('frame_' + uploadStartMs)}.jpg`);
+      formData.append("frame_id", meta.frame_id || `FRM-${uploadStartMs}`);
+      formData.append("bus_id", this.busId);
+      formData.append("device_id", this.deviceId);
+      formData.append("sequence_number", seq.toString());
+      formData.append("capture_timestamp", meta.capture_iso || new Date(uploadStartMs).toISOString());
+      formData.append("width", (meta.width || 640).toString());
+      formData.append("height", (meta.height || 480).toString());
+
+      // GPS Alignment
+      if (gpsReading && !gpsReading.is_stale && gpsReading.latitude !== null && gpsReading.longitude !== null) {
+        formData.append("location_status", "FIXED");
+        formData.append("latitude", gpsReading.latitude.toString());
+        formData.append("longitude", gpsReading.longitude.toString());
+        formData.append("accuracy", (gpsReading.accuracy || 10.0).toString());
+        formData.append("speed", (gpsReading.speed || 0.0).toString());
+        if (gpsReading.heading !== null) formData.append("heading", gpsReading.heading.toString());
+      } else if (gpsReading && gpsReading.latitude !== null && gpsReading.longitude !== null) {
+        formData.append("location_status", "STALE");
+        formData.append("latitude", gpsReading.latitude.toString());
+        formData.append("longitude", gpsReading.longitude.toString());
+        formData.append("accuracy", (gpsReading.accuracy || 25.0).toString());
+      } else {
+        formData.append("location_status", "UNKNOWN");
+      }
+
+      // IMU Alignment
+      if (imuReading) {
+        formData.append("ax", imuReading.ax.toString());
+        formData.append("ay", imuReading.ay.toString());
+        formData.append("az", imuReading.az.toString());
+        formData.append("gravity_compensated_z", imuReading.gravity_compensated_z.toString());
+        formData.append("shock_score", imuReading.shock_score.toString());
+        formData.append("vibration_level", imuReading.vibration_level || "NORMAL");
+      }
+
+      if (this.conn.backendOnline) {
         const res = await fetch(`${this.baseUrl}/api/v1/stream/frame`, {
           method: "POST",
           body: formData
         });
+
+        this.metrics.lastUploadLatencyMs = Date.now() - uploadStartMs;
+
         if (res.ok) {
           this.metrics.framesUploaded++;
+          this.metrics.lastUploadStatus = "SUCCESS";
+          
           const data = await res.json();
+          if (data.processing_ms) {
+            this.metrics.aiLatencyMs = data.processing_ms;
+          }
+
           if (data.defects_detected > 0) {
             this.metrics.detectionsCount += data.defects_detected;
-            this.log(`🎯 ${data.defects_detected} Road Defect(s) Detected by Server AI!`, "info");
+            this.log(`🎯 ${data.defects_detected} Road Defect(s) Detected by Server AI! (Events: ${data.events_created ? data.events_created.join(', ') : 'OK'})`, "info");
           }
         } else {
           this.metrics.failedUploads++;
+          this.metrics.lastUploadStatus = `HTTP_${res.status}`;
+          this.log(`Upload warning: Server returned HTTP ${res.status}`, "warn");
         }
-      } catch (e) {
-        this.metrics.failedUploads++;
+      } else {
+        this.metrics.framesDropped++;
+        this.metrics.lastUploadStatus = "OFFLINE_DROPPED";
       }
-    } else {
-      this.metrics.framesDropped++;
+    } catch (e) {
+      this.metrics.failedUploads++;
+      this.metrics.lastUploadStatus = `ERROR: ${e.message}`;
+    } finally {
+      this.isUploadingFrame = false;
+      this.notifyStatus();
     }
-
-    this.notifyStatus();
   }
 
   async uploadManualPhoto(file) {
@@ -266,15 +341,30 @@ class MobileSensorController {
     this.log(`Uploading manual high-res hazard photo (${(file.size / 1024).toFixed(1)} KB)...`, "info");
 
     const gpsReading = this.gps.getReading();
+    const imuReading = this.imu.getReading();
+    const seq = this.sequenceNumber++;
+    const nowMs = Date.now();
+
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("frame_id", `MANUAL-${nowMs}`);
     formData.append("bus_id", this.busId);
     formData.append("device_id", this.deviceId);
+    formData.append("sequence_number", seq.toString());
+    formData.append("capture_timestamp", new Date(nowMs).toISOString());
 
-    if (gpsReading) {
+    if (gpsReading && gpsReading.latitude !== null && gpsReading.longitude !== null) {
+      formData.append("location_status", gpsReading.is_stale ? "STALE" : "FIXED");
       formData.append("latitude", gpsReading.latitude.toString());
       formData.append("longitude", gpsReading.longitude.toString());
-      formData.append("accuracy", gpsReading.accuracy.toString());
+      formData.append("accuracy", (gpsReading.accuracy || 10.0).toString());
+    } else {
+      formData.append("location_status", "UNKNOWN");
+    }
+
+    if (imuReading) {
+      formData.append("az", imuReading.az.toString());
+      formData.append("gravity_compensated_z", imuReading.gravity_compensated_z.toString());
     }
 
     try {
@@ -315,12 +405,16 @@ class MobileSensorController {
 
   async getStatus() {
     const queueCounts = await this.queue.getCounts();
+    const camMetrics = this.camera ? this.camera.getMetrics() : null;
+
     return {
       isSensing: this.isSensing,
       isPaused: this.isPaused,
       busId: this.busId,
       deviceId: this.deviceId,
-      cameraState: this.camera ? this.camera.state : "UNAVAILABLE",
+      cameraState: this.camera ? this.camera.state : "IDLE",
+      cameraStateDetail: this.camera ? this.camera.stateDetail : "",
+      cameraMetrics: camMetrics,
       gpsState: this.gps.state,
       gpsReading: this.gps.getReading(),
       imuState: this.imu.state,
@@ -337,7 +431,10 @@ class MobileSensorController {
         total: queueCounts.total,
         isFlushing: this.queue.isFlushing
       },
-      metrics: { ...this.metrics }
+      metrics: {
+        ...this.metrics,
+        measuredCaptureFps: camMetrics ? camMetrics.measuredFps : 0.0
+      }
     };
   }
 

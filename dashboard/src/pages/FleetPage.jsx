@@ -23,6 +23,15 @@ export function FleetPage({ buses = [], onSelectBus }) {
   const [filter, setFilter] = useState('ALL'); // ALL, ONLINE, OFFLINE, STALE, GPS_ALERT
   const [selectedBusId, setSelectedBusId] = useState(buses.length > 0 ? buses[0].bus_id : 'BUS-101');
   const [streamCacheBuster, setStreamCacheBuster] = useState(Date.now());
+  const [hasFrame, setHasFrame] = useState(true);
+
+  // Poll live camera frame every 1200ms
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setStreamCacheBuster(Date.now());
+    }, 1200);
+    return () => clearInterval(timer);
+  }, []);
 
   const selectedBus = buses.find(b => b.bus_id === selectedBusId) || buses[0] || null;
 
@@ -269,15 +278,17 @@ export function FleetPage({ buses = [], onSelectBus }) {
                   key={streamCacheBuster}
                   src={`/api/v1/stream/latest-frame?bus_id=${selectedBus.bus_id}&t=${streamCacheBuster}`}
                   alt={`Live feed from ${selectedBus.bus_id}`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'flex';
-                  }}
+                  className={`w-full h-full object-cover transition-opacity duration-200 ${hasFrame ? 'opacity-100' : 'opacity-0'}`}
+                  onLoad={() => setHasFrame(true)}
+                  onError={() => setHasFrame(false)}
                 />
-                <div className="hidden absolute inset-0 flex-col items-center justify-center bg-zinc-950/90 text-zinc-500 text-[11px] p-4 text-center">
-                  <span>Camera frame buffer awaiting upload</span>
-                </div>
+                {!hasFrame && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 text-zinc-500 text-[11px] p-4 text-center">
+                    <Camera className="w-6 h-6 text-zinc-600 mb-1.5 animate-pulse" />
+                    <span>Awaiting live dashcam frame...</span>
+                    <span className="text-[9px] text-zinc-600 mt-0.5">Start Sensing on mobile to stream</span>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -18,7 +18,7 @@ class GartikaMobileEdgeApp {
 
   init() {
     this.bindDOM();
-    this.controller.setVideoElement(this.cameraPreview);
+    this.controller.setVideoElement(this.cameraPreview, this.virtualPreviewCanvas);
     this.bindEvents();
     this.updateHostTarget();
     this.controller.notifyStatus();
@@ -30,6 +30,7 @@ class GartikaMobileEdgeApp {
     this.toggleBtnText = document.getElementById("toggleBtnText");
     this.pauseBtn = document.getElementById("pauseBtn");
     this.pauseBtnText = document.getElementById("pauseBtnText");
+    this.btnSwitchCam = document.getElementById("btnSwitchCam");
     
     this.sensingBanner = document.getElementById("sensingBanner");
     this.bannerStateText = document.getElementById("bannerStateText");
@@ -45,9 +46,14 @@ class GartikaMobileEdgeApp {
     this.netStatusText = document.getElementById("netStatusText");
 
     this.cameraPreview = document.getElementById("cameraPreview");
+    this.virtualPreviewCanvas = document.getElementById("virtualPreviewCanvas");
     this.camFallbackMsg = document.getElementById("camFallbackMsg");
+    this.camNoticeTitle = document.getElementById("camNoticeTitle");
+    this.camNoticeText = document.getElementById("camNoticeText");
+    this.btnRetryCamera = document.getElementById("btnRetryCamera");
     this.ingestMode = document.getElementById("ingestMode");
     this.hudPing = document.getElementById("hudPing");
+    this.hudFps = document.getElementById("hudFps");
 
     this.offlineQueueBar = document.getElementById("offlineQueueBar");
     this.queueCount = document.getElementById("queueCount");
@@ -77,11 +83,20 @@ class GartikaMobileEdgeApp {
     this.diagDeviceId = document.getElementById("diagDeviceId");
     this.diagBusId = document.getElementById("diagBusId");
     this.diagCam = document.getElementById("diagCam");
+    this.diagCamPerm = document.getElementById("diagCamPerm");
+    this.diagCamRes = document.getElementById("diagCamRes");
+    this.diagCamFps = document.getElementById("diagCamFps");
+    this.diagFramesCap = document.getElementById("diagFramesCap");
+    this.diagFramesDrop = document.getElementById("diagFramesDrop");
     this.diagGps = document.getElementById("diagGps");
     this.diagImu = document.getElementById("diagImu");
+    this.diagHost = document.getElementById("diagHost");
     this.diagRtt = document.getElementById("diagRtt");
+    this.diagLastUpload = document.getElementById("diagLastUpload");
+    this.diagAiLatency = document.getElementById("diagAiLatency");
     this.diagQueue = document.getElementById("diagQueue");
     this.diagFailed = document.getElementById("diagFailed");
+    this.btnDiagRetryCam = document.getElementById("btnDiagRetryCam");
     this.btnRetryFailed = document.getElementById("btnRetryFailed");
     this.btnClearFailed = document.getElementById("btnClearFailed");
   }
@@ -93,6 +108,35 @@ class GartikaMobileEdgeApp {
 
     if (this.pauseBtn) {
       this.pauseBtn.addEventListener("click", () => this.handlePause());
+    }
+
+    if (this.btnSwitchCam) {
+      this.btnSwitchCam.addEventListener("click", async () => {
+        if (this.controller.camera) {
+          this.log("Switching camera facing mode...", "info");
+          await this.controller.camera.switchCamera();
+          this.controller.notifyStatus();
+        }
+      });
+    }
+
+    if (this.btnRetryCamera) {
+      this.btnRetryCamera.addEventListener("click", async () => {
+        this.log("Retrying camera initialization...", "info");
+        if (this.controller.camera) {
+          await this.controller.camera.retry();
+          this.controller.notifyStatus();
+        }
+      });
+    }
+
+    if (this.btnDiagRetryCam) {
+      this.btnDiagRetryCam.addEventListener("click", async () => {
+        if (this.controller.camera) {
+          await this.controller.camera.retry();
+          this.openDiagnostics();
+        }
+      });
     }
 
     if (this.busIdInput) {
@@ -210,13 +254,43 @@ class GartikaMobileEdgeApp {
       this.pauseBtnText.textContent = "Pause";
     }
 
-    // 2. Camera Status
+    // 2. Camera Status & Viewport Overlay
     const camRunning = st.cameraState === "RUNNING";
+    const camError = ["PERMISSION_DENIED", "NO_CAMERA", "CAMERA_ERROR"].includes(st.cameraState);
+    
     this.camStatusText.textContent = st.cameraState;
-    this.camStatus.className = `status-pill ${camRunning ? "online" : (st.cameraState === "PAUSED" ? "warn" : "")}`;
+    this.camStatus.className = `status-pill ${camRunning ? "online" : (camError ? "error" : (st.cameraState === "PAUSED" ? "warn" : ""))}`;
+
     if (this.camFallbackMsg) {
-      if (camRunning) this.camFallbackMsg.classList.add("hidden");
-      else this.camFallbackMsg.classList.remove("hidden");
+      if (camRunning) {
+        this.camFallbackMsg.classList.add("hidden");
+        if (this.btnRetryCamera) this.btnRetryCamera.classList.add("hidden");
+      } else {
+        this.camFallbackMsg.classList.remove("hidden");
+        if (camError) {
+          if (st.cameraState === "PERMISSION_DENIED") {
+            this.camNoticeTitle.textContent = "Camera Access Blocked";
+            this.camNoticeText.textContent = "Allow camera permission in browser site settings, then press Retry.";
+          } else if (st.cameraState === "NO_CAMERA") {
+            this.camNoticeTitle.textContent = "No Camera Hardware";
+            this.camNoticeText.textContent = "No camera was detected on this device.";
+          } else {
+            this.camNoticeTitle.textContent = "Camera Hardware Unavailable";
+            this.camNoticeText.textContent = st.cameraStateDetail || "Unable to access video stream.";
+          }
+          if (this.btnRetryCamera) this.btnRetryCamera.classList.remove("hidden");
+        } else {
+          this.camNoticeTitle.textContent = "Windshield Camera Feed";
+          this.camNoticeText.textContent = "Camera activates on 'Start Sensing'. Ensure phone faces road.";
+          if (this.btnRetryCamera) this.btnRetryCamera.classList.add("hidden");
+        }
+      }
+    }
+
+    if (this.hudFps) {
+      this.hudFps.textContent = st.cameraMetrics && st.cameraMetrics.measuredFps > 0
+        ? `${st.cameraMetrics.measuredFps.toFixed(1)} FPS`
+        : (camRunning ? "15.0 FPS" : "--");
     }
 
     // 3. GPS Status
@@ -278,14 +352,26 @@ class GartikaMobileEdgeApp {
 
   async openDiagnostics() {
     const st = await this.controller.getStatus();
-    this.diagDeviceId.textContent = st.deviceId;
-    this.diagBusId.textContent = st.busId;
-    this.diagCam.textContent = st.cameraState;
-    this.diagGps.textContent = `${st.gpsState} (${st.gpsReading ? (st.gpsReading.accuracy ? `±${st.gpsReading.accuracy.toFixed(1)}m` : 'locked') : 'no fix'})`;
-    this.diagImu.textContent = `${st.imuState} (Base G: ${st.imuReading ? st.imuReading.baseline_g : 9.81} m/s²)`;
-    this.diagRtt.textContent = st.network.rttMs !== null ? `${st.network.rttMs} ms` : "Offline";
-    this.diagQueue.textContent = `${st.queue.pending} pending / ${st.queue.total} total`;
-    this.diagFailed.textContent = `${st.queue.failed} permanently failed`;
+    const cm = st.cameraMetrics || {};
+
+    if (this.diagDeviceId) this.diagDeviceId.textContent = st.deviceId;
+    if (this.diagBusId) this.diagBusId.textContent = st.busId;
+    if (this.diagCam) this.diagCam.textContent = `${st.cameraState} ${st.cameraStateDetail ? '(' + st.cameraStateDetail + ')' : ''}`;
+    if (this.diagCamPerm) this.diagCamPerm.textContent = cm.permissionStatus || "UNKNOWN";
+    if (this.diagCamRes) this.diagCamRes.textContent = cm.videoWidth ? `${cm.videoWidth} × ${cm.videoHeight}` : "--";
+    if (this.diagCamFps) this.diagCamFps.textContent = cm.measuredFps ? `${cm.measuredFps} FPS` : "--";
+    if (this.diagFramesCap) this.diagFramesCap.textContent = `${cm.framesCaptured || st.metrics.framesCaptured || 0}`;
+    if (this.diagFramesDrop) this.diagFramesDrop.textContent = `${cm.framesDropped || st.metrics.framesDropped || 0}`;
+    
+    if (this.diagGps) this.diagGps.textContent = `${st.gpsState} (${st.gpsReading ? (st.gpsReading.accuracy ? `±${st.gpsReading.accuracy.toFixed(1)}m` : 'locked') : 'no fix'})`;
+    const baseG = (st.imuReading && st.imuReading.baseline_g != null) ? st.imuReading.baseline_g : 9.81;
+    if (this.diagImu) this.diagImu.textContent = `${st.imuState} (Base G: ${baseG} m/s²)`;
+    if (this.diagHost) this.diagHost.textContent = this.controller.baseUrl;
+    if (this.diagRtt) this.diagRtt.textContent = st.network.rttMs !== null ? `${st.network.rttMs} ms` : "Offline";
+    if (this.diagLastUpload) this.diagLastUpload.textContent = `${st.metrics.lastUploadStatus} (${st.metrics.lastUploadLatencyMs}ms)`;
+    if (this.diagAiLatency) this.diagAiLatency.textContent = st.metrics.aiLatencyMs ? `${st.metrics.aiLatencyMs} ms` : "--";
+    if (this.diagQueue) this.diagQueue.textContent = `${st.queue.pending} pending / ${st.queue.total} total`;
+    if (this.diagFailed) this.diagFailed.textContent = `${st.queue.failed} permanently failed`;
 
     if (this.diagModal) this.diagModal.classList.remove("hidden");
   }

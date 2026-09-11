@@ -20,6 +20,7 @@ class ImuSensorManager {
     this.baselineGravity = 9.81;
     this.lastReading = {
       ax: 0.0, ay: 0.0, az: 9.81,
+      baseline_g: 9.81,
       gravity_compensated_z: 0.0,
       shock_score: 0.0,
       vibration_level: "NORMAL",

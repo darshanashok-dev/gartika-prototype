@@ -38,7 +38,7 @@
     <div class="status-grid">
       <div class="status-pill" id="camStatus">
         <span class="dot"></span>
-        <span class="text">CAM: <strong id="camStatusText">READY</strong></span>
+        <span class="text">CAM: <strong id="camStatusText">IDLE</strong></span>
       </div>
       <div class="status-pill" id="gpsStatus">
         <span class="dot"></span>
@@ -55,8 +55,9 @@
     </div>
 
     <!-- Camera / Visual Edge Feed Viewport -->
-    <div class="viewport-container">
-      <video id="cameraPreview" autoplay playsinline muted></video>
+    <div class="viewport-container" id="viewportContainer">
+      <video id="cameraPreview" autoplay playsinline webkit-playsinline muted></video>
+      <canvas id="virtualPreviewCanvas" class="hidden" width="640" height="480"></canvas>
       
       <div class="hud-overlay">
         <div class="hud-corner top-left"></div>
@@ -69,19 +70,20 @@
             <span class="rec-dot" id="recDot"></span>
             INGEST: <span id="ingestMode">STANDBY</span>
           </div>
-          <div>LATENCY: <span id="hudPing">--</span> | FPS: <span id="hudFps">15.0</span></div>
+          <div>FPS: <span id="hudFps">--</span> | RTT: <span id="hudPing">--</span></div>
         </div>
       </div>
 
       <div class="fallback-camera-msg" id="camFallbackMsg">
-        <div class="cam-notice-icon">
+        <div class="cam-notice-icon" id="camNoticeIcon">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
             <circle cx="12" cy="13" r="4"></circle>
           </svg>
         </div>
-        <div class="cam-notice-title">Windshield Camera Feed</div>
+        <div class="cam-notice-title" id="camNoticeTitle">Windshield Camera Feed</div>
         <div class="cam-notice-sub" id="camNoticeText">Camera activates on 'Start Sensing'. Ensure phone faces road.</div>
+        <button class="btn btn-secondary font-mono text-xs hidden mt-2" id="btnRetryCamera">Retry Camera</button>
       </div>
     </div>
 
@@ -159,8 +161,14 @@
         </button>
       </div>
 
+      <div class="flex items-center gap-2 mt-2">
+        <button id="btnSwitchCam" class="btn btn-secondary font-mono text-xs flex-1">
+          <span>Flip Camera (Rear/Front)</span>
+        </button>
+      </div>
+
       <!-- Quick Snap Native Camera Input -->
-      <div class="quick-snap-card">
+      <div class="quick-snap-card mt-2">
         <label class="btn-snap font-mono" for="snapInput">
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
@@ -205,13 +213,22 @@
         <div class="diag-row"><span>Device Node ID:</span> <strong id="diagDeviceId">--</strong></div>
         <div class="diag-row"><span>Bus Identifier:</span> <strong id="diagBusId">--</strong></div>
         <div class="diag-row"><span>Camera State:</span> <strong id="diagCam">--</strong></div>
+        <div class="diag-row"><span>Camera Permission:</span> <strong id="diagCamPerm">--</strong></div>
+        <div class="diag-row"><span>Resolution:</span> <strong id="diagCamRes">--</strong></div>
+        <div class="diag-row"><span>Capture FPS:</span> <strong id="diagCamFps">--</strong></div>
+        <div class="diag-row"><span>Frames Captured:</span> <strong id="diagFramesCap">0</strong></div>
+        <div class="diag-row"><span>Frames Dropped:</span> <strong id="diagFramesDrop">0</strong></div>
         <div class="diag-row"><span>GPS Fix & Age:</span> <strong id="diagGps">--</strong></div>
-        <div class="diag-row"><span>IMU Gravity Cal:</span> <strong id="diagImu">--</strong></div>
+        <div class="diag-row"><span>IMU Base Gravity:</span> <strong id="diagImu">--</strong></div>
+        <div class="diag-row"><span>Backend URL:</span> <strong id="diagHost">--</strong></div>
         <div class="diag-row"><span>Network RTT:</span> <strong id="diagRtt">--</strong></div>
+        <div class="diag-row"><span>Last Upload:</span> <strong id="diagLastUpload">--</strong></div>
+        <div class="diag-row"><span>AI Latency:</span> <strong id="diagAiLatency">--</strong></div>
         <div class="diag-row"><span>Queue Backlog:</span> <strong id="diagQueue">--</strong></div>
         <div class="diag-row"><span>Failed Retries:</span> <strong id="diagFailed">--</strong></div>
       </div>
       <div class="modal-footer">
+        <button class="btn btn-secondary font-mono text-xs" id="btnDiagRetryCam">Retry Camera</button>
         <button class="btn btn-secondary font-mono text-xs" id="btnRetryFailed">Retry Failed</button>
         <button class="btn btn-secondary font-mono text-xs" id="btnClearFailed">Clear Failed</button>
       </div>
