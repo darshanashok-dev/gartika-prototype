@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { TopNav } from './components/TopNav';
 import { DefectDrawer } from './components/DefectDrawer';
 import { CreateWorkOrderModal } from './components/CreateWorkOrderModal';
+import { MobileSensingModal } from './components/MobileSensingModal';
 
 import { OverviewPage } from './pages/OverviewPage';
 import { LiveMapPage } from './pages/LiveMapPage';
@@ -26,6 +27,7 @@ export function App() {
   const [selectedDefect, setSelectedDefect] = useState(null);
   const [workOrderModalDefect, setWorkOrderModalDefect] = useState(null);
   const [evidenceModalUrl, setEvidenceModalUrl] = useState(null);
+  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [backendHealthy, setBackendHealthy] = useState(true);
@@ -137,6 +139,7 @@ export function App() {
         defectCount={defects.length}
         busCount={buses.length}
         pendingWorkOrders={pendingWoCount}
+        onOpenMobileModal={() => setIsMobileModalOpen(true)}
       />
 
       {/* Main Content Pane */}
@@ -151,6 +154,7 @@ export function App() {
           isRefreshing={isRefreshing}
           onExportCsv={handleExportCsv}
           isDemoMode={isDemoMode}
+          onOpenMobileModal={() => setIsMobileModalOpen(true)}
         />
 
         {/* Page Container */}
@@ -265,6 +269,13 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* Mobile Sensing QR Code Pairing Modal */}
+      <MobileSensingModal
+        isOpen={isMobileModalOpen}
+        onClose={() => setIsMobileModalOpen(false)}
+        localIp={stats.local_ip}
+      />
     </div>
   );
 }

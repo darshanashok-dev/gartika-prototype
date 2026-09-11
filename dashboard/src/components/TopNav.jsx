@@ -8,7 +8,8 @@ import {
   RefreshCw, 
   Clock,
   ShieldCheck,
-  Server
+  Server,
+  QrCode
 } from 'lucide-react';
 import { ConnectionStatus } from '../services/websocket';
 
@@ -20,7 +21,8 @@ export function TopNav({
   onRefresh, 
   isRefreshing, 
   onExportCsv,
-  isDemoMode 
+  isDemoMode,
+  onOpenMobileModal
 }) {
   const getWsBadge = () => {
     switch (wsStatus) {
@@ -87,6 +89,14 @@ export function TopNav({
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={onOpenMobileModal}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors font-mono"
+        >
+          <QrCode className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Pair Mobile</span>
+        </button>
+
         <button
           onClick={onRefresh}
           disabled={isRefreshing}

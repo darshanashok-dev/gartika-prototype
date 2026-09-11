@@ -21,7 +21,7 @@ const NAV_ITEMS = [
   { id: 'settings', label: 'System & Health', icon: Settings },
 ];
 
-export function Sidebar({ activeTab, setActiveTab, defectCount, busCount, pendingWorkOrders }) {
+export function Sidebar({ activeTab, setActiveTab, defectCount, busCount, pendingWorkOrders, onOpenMobileModal }) {
   return (
     <aside className="w-56 border-r border-zinc-800/80 bg-zinc-900/60 flex flex-col justify-between shrink-0 select-none">
       <div>
@@ -83,18 +83,18 @@ export function Sidebar({ activeTab, setActiveTab, defectCount, busCount, pendin
 
       {/* Footer / Mobile Sensing Link */}
       <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/40 space-y-2">
-        <a
-          href="/mobile"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-xs font-mono font-medium text-zinc-300 bg-zinc-850 hover:bg-zinc-800 border border-zinc-750 transition-colors"
+        <button
+          onClick={onOpenMobileModal}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-xs font-mono font-medium text-zinc-200 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 transition-colors shadow-sm"
         >
           <div className="flex items-center gap-2">
             <Smartphone className="w-3.5 h-3.5 text-amber-400" />
             <span>Mobile Sensing</span>
           </div>
-          <Radio className="w-3 h-3 text-emerald-400 animate-pulse-subtle" />
-        </a>
+          <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+            QR CODE
+          </span>
+        </button>
 
         <div className="text-[10px] text-zinc-400 font-mono text-center">
           SIH 2026 • PS 26124
