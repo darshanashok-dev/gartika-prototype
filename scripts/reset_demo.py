@@ -16,6 +16,11 @@ if str(BASE_DIR) not in sys.path:
 
 from backend.app.config import settings
 from backend.app.database import engine, Base
+import backend.app.models.bus
+import backend.app.models.defect
+import backend.app.models.event
+import backend.app.models.telemetry
+import backend.app.models.work_order
 
 def reset_demo_state():
     print("=" * 60)
